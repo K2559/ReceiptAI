@@ -1,0 +1,5 @@
+{
+  "name": "ReceiptAI",
+  "description": "Intelligent receipt extraction and management system using Gemini 2.5 Flash.",
+  "requestFramePermissions": []
+}
