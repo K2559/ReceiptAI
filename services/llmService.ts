@@ -42,16 +42,20 @@ const fileToBase64 = (file: File): Promise<string> => {
 export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
   const settings = getSettings();
   const baseId = uuidv4();
-  const defaultResult: ReceiptData = {
-    id: baseId,
-    createdAt: Date.now(),
-    status: 'error',
-    rawImage: URL.createObjectURL(file)
-  };
-
+  
   try {
     let extractedData: any = {};
     const base64Data = await fileToBase64(file);
+    
+    // Store image as data URL for persistence
+    const imageDataUrl = `data:${file.type};base64,${base64Data}`;
+    
+    const defaultResult: ReceiptData = {
+      id: baseId,
+      createdAt: Date.now(),
+      status: 'error',
+      rawImage: imageDataUrl
+    };
 
     if (settings.provider === 'gemini') {
       // Gemini Implementation
