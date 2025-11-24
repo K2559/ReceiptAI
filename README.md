@@ -1,20 +1,52 @@
+# ReceiptAI
+
+Utilizing the powerful features of LLM to digitize receipts
+
 <div align="center">
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+## 🚀 Live Demo
 
-This contains everything you need to run your app locally.
+Visit the live app: **https://k2559.github.io/ReceiptAI/**
 
-View your app in AI Studio: https://ai.studio/apps/drive/1A0zMsNqyHWq9fxdbu1dkGQmlAh4l5rdt
+## Features
+
+- 📸 Upload receipt images for automatic data extraction
+- 🤖 AI-powered text extraction using Google Gemini
+- 💾 Local database storage for all receipts
+- 📊 Export data to Excel
+- ⚙️ Customizable settings
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+**Prerequisites:** Node.js
 
 1. Install dependencies:
-   `npm install`
+   ```bash
+   npm install
+   ```
+
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+
 3. Run the app:
-   `npm run dev`
+   ```bash
+   npm run dev
+   ```
+
+## Deploy to GitHub Pages
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
+
+## Tech Stack
+
+- React 19
+- TypeScript
+- Vite
+- Google Gemini AI
+- Tailwind CSS
+- React Router
+
+## View in AI Studio
+
+https://ai.studio/apps/drive/1A0zMsNqyHWq9fxdbu1dkGQmlAh4l5rdt
