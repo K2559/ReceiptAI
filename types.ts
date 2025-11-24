@@ -24,6 +24,7 @@ export enum ProcessingStatus {
 }
 
 export type LLMProvider = 'gemini' | 'openrouter' | 'local';
+export type ImageStorageProvider = 'imgbb' | 'cloudinary' | 'local';
 
 export interface AppSettings {
   provider: LLMProvider;
@@ -32,4 +33,8 @@ export interface AppSettings {
   model: string;
   systemPrompt: string;
   outputSchema: string; // JSON string representation of the schema
+  imageStorage: ImageStorageProvider;
+  imgbbApiKey?: string;
+  cloudinaryCloudName?: string;
+  cloudinaryUploadPreset?: string;
 }

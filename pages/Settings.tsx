@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getSettings, saveSettings, resetSettings } from '../services/settingsService';
-import { AppSettings, LLMProvider } from '../types';
+import { AppSettings, LLMProvider, ImageStorageProvider } from '../types';
 import { Save, RotateCcw, CheckCircle } from 'lucide-react';
 
 const SettingsPage: React.FC = () => {
@@ -140,6 +140,79 @@ const SettingsPage: React.FC = () => {
                     onChange={(e) => handleChange('systemPrompt', e.target.value)}
                     className="w-full h-64 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm leading-relaxed"
                 />
+            </div>
+
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <h2 className="text-lg font-semibold text-slate-900 mb-4">Image Storage</h2>
+                
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Storage Provider</label>
+                        <select 
+                            value={settings.imageStorage}
+                            onChange={(e) => handleChange('imageStorage', e.target.value)}
+                            className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-slate-50"
+                        >
+                            <option value="imgbb">ImgBB (Free)</option>
+                            <option value="cloudinary">Cloudinary (Free 25GB)</option>
+                            <option value="local">Local (Browser Storage)</option>
+                        </select>
+                    </div>
+
+                    {settings.imageStorage === 'imgbb' && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                                ImgBB API Key <span className="text-slate-400 font-normal">(Optional)</span>
+                            </label>
+                            <input 
+                                type="password"
+                                value={settings.imgbbApiKey || ''}
+                                onChange={(e) => handleChange('imgbbApiKey', e.target.value)}
+                                placeholder="Get free key from api.imgbb.com"
+                                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                                Free tier: Unlimited storage. <a href="https://api.imgbb.com/" target="_blank" className="text-brand-600 hover:underline">Get API key</a>
+                            </p>
+                        </div>
+                    )}
+
+                    {settings.imageStorage === 'cloudinary' && (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Cloud Name</label>
+                                <input 
+                                    type="text"
+                                    value={settings.cloudinaryCloudName || ''}
+                                    onChange={(e) => handleChange('cloudinaryCloudName', e.target.value)}
+                                    placeholder="your-cloud-name"
+                                    className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Upload Preset</label>
+                                <input 
+                                    type="text"
+                                    value={settings.cloudinaryUploadPreset || ''}
+                                    onChange={(e) => handleChange('cloudinaryUploadPreset', e.target.value)}
+                                    placeholder="unsigned_preset"
+                                    className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                                />
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Free tier: 25GB storage, 25GB bandwidth/month. <a href="https://cloudinary.com/users/register/free" target="_blank" className="text-brand-600 hover:underline">Sign up free</a>
+                                </p>
+                            </div>
+                        </>
+                    )}
+
+                    {settings.imageStorage === 'local' && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                            <p className="text-xs text-amber-800">
+                                ⚠️ Local storage has a 5-10MB limit. Images may be lost if storage is full. Use cloud storage for production.
+                            </p>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
 

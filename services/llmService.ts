@@ -39,22 +39,76 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
+// Upload image to cloud storage
+const uploadImageToCloud = async (file: File): Promise<string> => {
+  const settings = getSettings();
+  
+  try {
+    if (settings.imageStorage === 'imgbb') {
+      // ImgBB - Get free API key from https://api.imgbb.com/
+      const apiKey = settings.imgbbApiKey || 'd0d3c0d3c0d3c0d3c0d3c0d3c0d3c0d3'; // Demo key
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) throw new Error('ImgBB upload failed');
+      const data = await response.json();
+      return data.data.url;
+      
+    } else if (settings.imageStorage === 'cloudinary') {
+      // Cloudinary - Free tier: 25GB storage
+      // Get credentials from https://cloudinary.com/
+      if (!settings.cloudinaryCloudName || !settings.cloudinaryUploadPreset) {
+        throw new Error('Cloudinary credentials not configured');
+      }
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', settings.cloudinaryUploadPreset);
+      
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${settings.cloudinaryCloudName}/image/upload`,
+        { method: 'POST', body: formData }
+      );
+      
+      if (!response.ok) throw new Error('Cloudinary upload failed');
+      const data = await response.json();
+      return data.secure_url;
+      
+    } else {
+      // Local storage (base64) - fallback
+      throw new Error('Using local storage');
+    }
+  } catch (error) {
+    console.warn('Cloud upload failed, using local base64 storage:', error);
+    // Fallback to base64 if upload fails
+    const base64 = await fileToBase64(file);
+    return `data:${file.type};base64,${base64}`;
+  }
+};
+
 export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
   const settings = getSettings();
   const baseId = uuidv4();
   
   try {
     let extractedData: any = {};
-    const base64Data = await fileToBase64(file);
     
-    // Store image as data URL for persistence
-    const imageDataUrl = `data:${file.type};base64,${base64Data}`;
+    // Upload image to cloud storage first
+    const imageUrl = await uploadImageToCloud(file);
+    
+    // Get base64 for LLM processing
+    const base64Data = await fileToBase64(file);
     
     const defaultResult: ReceiptData = {
       id: baseId,
       createdAt: Date.now(),
       status: 'error',
-      rawImage: imageDataUrl
+      rawImage: imageUrl // Store cloud URL instead of base64
     };
 
     if (settings.provider === 'gemini') {

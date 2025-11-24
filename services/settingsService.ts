@@ -34,7 +34,11 @@ const DEFAULT_SETTINGS: AppSettings = {
   baseUrl: '',
   model: 'gemini-2.5-flash',
   systemPrompt: DEFAULT_PROMPT,
-  outputSchema: DEFAULT_SCHEMA
+  outputSchema: DEFAULT_SCHEMA,
+  imageStorage: 'imgbb',
+  imgbbApiKey: '',
+  cloudinaryCloudName: '',
+  cloudinaryUploadPreset: ''
 };
 
 export const getSettings = (): AppSettings => {
