@@ -47,6 +47,3 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
 - Tailwind CSS
 - React Router
 
-## View in AI Studio
-
-https://ai.studio/apps/drive/1A0zMsNqyHWq9fxdbu1dkGQmlAh4l5rdt
