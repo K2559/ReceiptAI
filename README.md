@@ -8,7 +8,7 @@ Utilizing the powerful features of LLM to digitize receipts
 
 ## 🚀 Live Demo
 
-Visit the live app: **https://k2559.github.io/ReceiptAI/**
+Visit the live app: **[https://k2559.github.io/ReceiptAI/](https://k2559.github.io/ReceiptAI/)**
 
 ## Features
 
