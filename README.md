@@ -1,49 +1,128 @@
 # ReceiptAI
 
-Utilizing the powerful features of LLM to digitize receipts
+A modern web application that uses AI to digitize and manage receipts automatically.
 
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+<img width="1200" height="475" alt="ReceiptAI Banner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
 ## 🚀 Live Demo
 
-Visit the live app: **[https://k2559.github.io/ReceiptAI/](https://k2559.github.io/ReceiptAI/)**
+**[https://k2559.github.io/ReceiptAI/](https://k2559.github.io/ReceiptAI/)**
 
-## Features
+## ✨ Features
 
-- 📸 Upload receipt images for automatic data extraction
-- 🤖 AI-powered text extraction using Google Gemini
-- 💾 Local database storage for all receipts
-- 📊 Export data to Excel
-- ⚙️ Customizable settings
+- 📸 **Image Upload** - Upload receipt images for automatic data extraction
+- 🤖 **AI-Powered Extraction** - Intelligent text extraction using Google Gemini AI
+- 💾 **Local Storage** - All data stored locally in your browser
+- 📊 **Excel Export** - Export receipts to Excel spreadsheets
+- 📄 **PDF Reports** - Generate professional PDF reports with multi-select
+- 🔍 **Search & Filter** - Easily find receipts by merchant, date, or status
+- ⚙️ **Customizable Settings** - Configure AI provider and API settings
 
-## Run Locally
+## 🛠️ Tech Stack
 
-**Prerequisites:** Node.js
+- **Frontend**: React 19, TypeScript
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS
+- **Routing**: React Router
+- **AI Provider**: Google Gemini AI
+- **PDF Generation**: jsPDF
+- **Excel Export**: SheetJS
 
-1. Install dependencies:
+## 📦 Installation
+
+### Prerequisites
+
+- Node.js (v18 or higher)
+- npm or yarn
+
+### Setup
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/k2559/ReceiptAI.git
+   cd ReceiptAI
+   ```
+
+2. Install dependencies:
    ```bash
    npm install
    ```
 
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Create a `.env.local` file in the root directory:
+   ```env
+   GEMINI_API_KEY=your_api_key_here
+   ```
 
-3. Run the app:
+4. Start the development server:
    ```bash
    npm run dev
    ```
 
-## Deploy to GitHub Pages
+5. Open your browser and navigate to `http://localhost:3000`
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
+## 🔑 Getting an API Key
 
-## Tech Stack
+To use ReceiptAI, you need a Google Gemini API key:
 
-- React 19
-- TypeScript
-- Vite
-- Google Gemini AI
-- Tailwind CSS
-- React Router
+1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Sign in with your Google account
+3. Create a new API key
+4. Copy the key and add it to your `.env.local` file
 
+## 📖 Usage
+
+1. **Upload Receipt**: Navigate to the Upload page and select a receipt image
+2. **AI Processing**: The AI will automatically extract merchant, date, amount, and line items
+3. **Review & Edit**: Review the extracted data and make any necessary corrections
+4. **Save**: Save the receipt to your local database
+5. **Export**: Generate Excel or PDF reports from the Database page
+
+## 🚀 Deployment
+
+### GitHub Pages
+
+This project is configured for automatic deployment to GitHub Pages:
+
+1. Push your code to the `main` branch
+2. GitHub Actions will automatically build and deploy
+3. Your app will be available at `https://yourusername.github.io/ReceiptAI/`
+
+### Manual Deployment
+
+```bash
+npm run build
+npm run deploy
+```
+
+## 📁 Project Structure
+
+```
+ReceiptAI/
+├── components/          # React components
+├── pages/              # Page components
+├── services/           # API and storage services
+├── utils/              # Utility functions
+├── types/              # TypeScript type definitions
+├── context/            # React context providers
+└── public/             # Static assets
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is open source and available under the MIT License.
+
+## 🙏 Acknowledgments
+
+- Google Gemini AI for powerful text extraction
+- React team for the amazing framework
+- All open source contributors
+
+## 📧 Contact
+
+For questions or feedback, please open an issue on GitHub.

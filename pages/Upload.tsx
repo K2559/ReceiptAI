@@ -1,7 +1,8 @@
 import React, { useCallback } from 'react';
-import { Upload as UploadIcon, X, FileText, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload as UploadIcon, X, FileText, Loader2, CheckCircle, AlertCircle, Terminal } from 'lucide-react';
 import { useProcessing } from '../context/ProcessingContext';
 import { useNavigate } from 'react-router-dom';
+import DebugLogViewer from '../components/DebugLogViewer';
 
 const UploadPage: React.FC = () => {
   const { 
@@ -16,6 +17,7 @@ const UploadPage: React.FC = () => {
   } = useProcessing();
   
   const [isDragging, setIsDragging] = React.useState(false);
+  const [showDebugLogs, setShowDebugLogs] = React.useState(false);
   const navigate = useNavigate();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -58,10 +60,21 @@ const UploadPage: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">Upload Receipts</h1>
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-3xl font-bold text-slate-900">Upload Receipts</h1>
+          <button
+            onClick={() => setShowDebugLogs(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+          >
+            <Terminal size={18} />
+            Debug Logs
+          </button>
+        </div>
         <p className="text-slate-600">Drag and drop images. Processing continues in the background if you switch pages.</p>
       </div>
+
+      <DebugLogViewer isOpen={showDebugLogs} onClose={() => setShowDebugLogs(false)} />
 
       {/* Drop Zone */}
       <div

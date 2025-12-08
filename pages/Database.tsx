@@ -2,8 +2,9 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { getReceipts, updateReceipt, deleteReceipt, clearDatabase } from '../services/storageService';
 import { getSettings } from '../services/settingsService';
 import { exportToExcel } from '../utils/excelUtils';
+import { generatePDFReport } from '../utils/pdfUtils';
 import { ReceiptData, ReceiptStatus } from '../types';
-import { Download, Trash2, Eye, Search, Check, X, ZoomIn, ZoomOut, RotateCcw, Save, ChevronUp, ChevronDown, ChevronsUpDown, Filter } from 'lucide-react';
+import { Download, Trash2, Eye, Search, Check, X, ZoomIn, ZoomOut, RotateCcw, Save, ChevronUp, ChevronDown, ChevronsUpDown, Filter, FileText } from 'lucide-react';
 import { useProcessing } from '../context/ProcessingContext';
 
 // --- Helper Components ---
@@ -61,6 +62,10 @@ const DatabasePage: React.FC = () => {
   // Sorting and Filtering State
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [statusFilter, setStatusFilter] = useState<ReceiptStatus | 'all'>('all');
+  
+  // Multi-select State
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   
   // Connect to global context to detect updates
   const { lastUpdated } = useProcessing();
@@ -134,6 +139,46 @@ const DatabasePage: React.FC = () => {
     setSortConfig({ key, direction });
   };
 
+  // Multi-select handlers
+  const toggleSelection = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === processedData.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(processedData.map(r => r.id)));
+    }
+  };
+
+  const handleGeneratePDF = () => {
+    const selectedReceipts = data.filter(r => selectedIds.has(r.id));
+    if (selectedReceipts.length === 0) {
+      alert('Please select at least one receipt to generate PDF');
+      return;
+    }
+    generatePDFReport(selectedReceipts, {
+      title: 'Receipt Report',
+      includeLineItems: true
+    });
+  };
+
+  const handleExportSelected = () => {
+    const selectedReceipts = data.filter(r => selectedIds.has(r.id));
+    if (selectedReceipts.length === 0) {
+      alert('Please select at least one receipt to export');
+      return;
+    }
+    exportToExcel(selectedReceipts);
+  };
+
   // Process Data: Filter -> Sort
   const processedData = useMemo(() => {
     let result = [...data];
@@ -187,22 +232,57 @@ const DatabasePage: React.FC = () => {
         <div className="flex items-center gap-3">
             <button
               onClick={() => {
-                  if(confirm("Clear all data?")) {
-                      clearDatabase();
-                      setData([]);
-                  }
+                  setIsSelectionMode(!isSelectionMode);
+                  if (isSelectionMode) setSelectedIds(new Set());
               }}
-              className="px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 text-sm font-medium transition-colors"
+              className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                isSelectionMode 
+                  ? 'bg-brand-600 text-white border-brand-600 hover:bg-brand-700' 
+                  : 'text-slate-700 bg-white border-slate-300 hover:bg-slate-50'
+              }`}
             >
-              Clear DB
+              {isSelectionMode ? 'Cancel Selection' : 'Select Multiple'}
             </button>
-            <button
-              onClick={() => exportToExcel(data)}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm font-medium transition-colors"
-            >
-              <Download size={18} />
-              Export to Excel
-            </button>
+            {isSelectionMode && selectedIds.size > 0 && (
+              <>
+                <button
+                  onClick={handleExportSelected}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm font-medium transition-colors"
+                >
+                  <Download size={18} />
+                  Export ({selectedIds.size})
+                </button>
+                <button
+                  onClick={handleGeneratePDF}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-medium transition-colors"
+                >
+                  <FileText size={18} />
+                  Generate PDF ({selectedIds.size})
+                </button>
+              </>
+            )}
+            {!isSelectionMode && (
+              <>
+                <button
+                  onClick={() => {
+                      if(confirm("Clear all data?")) {
+                          clearDatabase();
+                          setData([]);
+                      }
+                  }}
+                  className="px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 text-sm font-medium transition-colors"
+                >
+                  Clear DB
+                </button>
+                <button
+                  onClick={() => exportToExcel(data)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm font-medium transition-colors"
+                >
+                  <Download size={18} />
+                  Export All
+                </button>
+              </>
+            )}
         </div>
       </div>
 
@@ -243,6 +323,16 @@ const DatabasePage: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider font-semibold">
+                {isSelectionMode && (
+                  <th className="p-4 w-12">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === processedData.length && processedData.length > 0}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500 cursor-pointer"
+                    />
+                  </th>
+                )}
                 <th 
                     className="p-4 w-24 cursor-pointer hover:bg-slate-100 transition-colors select-none"
                     onClick={() => handleSort('status')}
@@ -279,7 +369,7 @@ const DatabasePage: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {processedData.length === 0 ? (
                 <tr>
-                    <td colSpan={columns.length + 3} className="p-12 text-center text-slate-500">
+                    <td colSpan={columns.length + 3 + (isSelectionMode ? 1 : 0)} className="p-12 text-center text-slate-500">
                         <div className="flex flex-col items-center gap-2">
                             <Search size={32} className="text-slate-300" />
                             <p>No receipts found matching your filters.</p>
@@ -290,9 +380,28 @@ const DatabasePage: React.FC = () => {
                 processedData.map((receipt) => (
                   <tr 
                     key={receipt.id} 
-                    onClick={() => setSelectedReceipt(receipt)}
-                    className="hover:bg-brand-50 transition-colors cursor-pointer group"
+                    onClick={(e) => {
+                      if (isSelectionMode) {
+                        e.stopPropagation();
+                        toggleSelection(receipt.id);
+                      } else {
+                        setSelectedReceipt(receipt);
+                      }
+                    }}
+                    className={`hover:bg-brand-50 transition-colors cursor-pointer group ${
+                      selectedIds.has(receipt.id) ? 'bg-brand-100' : ''
+                    }`}
                   >
+                    {isSelectionMode && (
+                      <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(receipt.id)}
+                          onChange={() => toggleSelection(receipt.id)}
+                          className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500 cursor-pointer"
+                        />
+                      </td>
+                    )}
                     <td className="p-4">
                       <StatusBadge status={receipt.status} />
                     </td>
@@ -311,14 +420,16 @@ const DatabasePage: React.FC = () => {
                         </td>
                     ))}
                     <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button className="text-brand-600 hover:text-brand-700 p-1" title="Review">
-                                <Eye size={18} />
-                            </button>
-                            <button onClick={(e) => handleDelete(receipt.id, e)} className="text-red-400 hover:text-red-600 p-1" title="Delete">
-                                <Trash2 size={18} />
-                            </button>
-                        </div>
+                        {!isSelectionMode && (
+                          <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button className="text-brand-600 hover:text-brand-700 p-1" title="Review">
+                                  <Eye size={18} />
+                              </button>
+                              <button onClick={(e) => handleDelete(receipt.id, e)} className="text-red-400 hover:text-red-600 p-1" title="Delete">
+                                  <Trash2 size={18} />
+                              </button>
+                          </div>
+                        )}
                     </td>
                   </tr>
                 ))

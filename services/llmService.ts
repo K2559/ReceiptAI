@@ -4,6 +4,30 @@ import { ReceiptData } from "../types";
 import { v4 as uuidv4 } from 'uuid';
 import { getSettings } from "./settingsService";
 
+// Debug logging system
+export interface DebugLog {
+  timestamp: number;
+  level: 'info' | 'warn' | 'error' | 'success';
+  message: string;
+  details?: any;
+}
+
+let debugLogs: DebugLog[] = [];
+
+export const addDebugLog = (level: DebugLog['level'], message: string, details?: any) => {
+  const log: DebugLog = {
+    timestamp: Date.now(),
+    level,
+    message,
+    details
+  };
+  debugLogs.push(log);
+  console.log(`[${level.toUpperCase()}] ${message}`, details || '');
+};
+
+export const getDebugLogs = () => [...debugLogs];
+export const clearDebugLogs = () => { debugLogs = []; };
+
 // Helper to convert standard JSON schema types to Gemini Enums
 const convertSchemaToGemini = (schema: any): Schema => {
   if (!schema) return { type: Type.OBJECT, properties: {} };
@@ -45,8 +69,8 @@ const uploadImageToCloud = async (file: File): Promise<string> => {
   
   try {
     if (settings.imageStorage === 'imgbb') {
-      // ImgBB - Get free API key from https://api.imgbb.com/
-      const apiKey = settings.imgbbApiKey || 'd0d3c0d3c0d3c0d3c0d3c0d3c0d3c0d3'; // Demo key
+      addDebugLog('info', 'Uploading to ImgBB...');
+      const apiKey = settings.imgbbApiKey || 'd0d3c0d3c0d3c0d3c0d3c0d3c0d3c0d3';
       const formData = new FormData();
       formData.append('image', file);
       
@@ -55,14 +79,19 @@ const uploadImageToCloud = async (file: File): Promise<string> => {
         body: formData
       });
       
-      if (!response.ok) throw new Error('ImgBB upload failed');
+      if (!response.ok) {
+        const errorText = await response.text();
+        addDebugLog('error', 'ImgBB upload failed', { status: response.status, error: errorText });
+        throw new Error('ImgBB upload failed');
+      }
       const data = await response.json();
+      addDebugLog('success', 'ImgBB upload successful', { url: data.data.url });
       return data.data.url;
       
     } else if (settings.imageStorage === 'cloudinary') {
-      // Cloudinary - Free tier: 25GB storage
-      // Get credentials from https://cloudinary.com/
+      addDebugLog('info', 'Uploading to Cloudinary...');
       if (!settings.cloudinaryCloudName || !settings.cloudinaryUploadPreset) {
+        addDebugLog('error', 'Cloudinary credentials not configured');
         throw new Error('Cloudinary credentials not configured');
       }
       
@@ -75,17 +104,21 @@ const uploadImageToCloud = async (file: File): Promise<string> => {
         { method: 'POST', body: formData }
       );
       
-      if (!response.ok) throw new Error('Cloudinary upload failed');
+      if (!response.ok) {
+        const errorText = await response.text();
+        addDebugLog('error', 'Cloudinary upload failed', { status: response.status, error: errorText });
+        throw new Error('Cloudinary upload failed');
+      }
       const data = await response.json();
+      addDebugLog('success', 'Cloudinary upload successful', { url: data.secure_url });
       return data.secure_url;
       
     } else {
-      // Local storage (base64) - fallback
+      addDebugLog('info', 'Using local base64 storage (no cloud provider configured)');
       throw new Error('Using local storage');
     }
   } catch (error) {
-    console.warn('Cloud upload failed, using local base64 storage:', error);
-    // Fallback to base64 if upload fails
+    addDebugLog('warn', 'Cloud upload failed, falling back to local base64 storage', { error: (error as Error).message });
     const base64 = await fileToBase64(file);
     return `data:${file.type};base64,${base64}`;
   }
@@ -95,38 +128,55 @@ export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
   const settings = getSettings();
   const baseId = uuidv4();
   
+  addDebugLog('info', `Starting extraction for: ${file.name}`, { 
+    fileSize: file.size, 
+    fileType: file.type,
+    provider: settings.provider 
+  });
+  
   try {
     let extractedData: any = {};
     
     // Upload image to cloud storage first
+    addDebugLog('info', 'Uploading image to cloud storage...');
     const imageUrl = await uploadImageToCloud(file);
+    addDebugLog('success', 'Image uploaded successfully', { url: imageUrl.substring(0, 50) + '...' });
     
     // Get base64 for LLM processing
     const base64Data = await fileToBase64(file);
+    const base64Preview = base64Data.substring(0, 50) + '...';
+    addDebugLog('info', 'Image converted to base64', { preview: base64Preview });
     
     const defaultResult: ReceiptData = {
       id: baseId,
       createdAt: Date.now(),
       status: 'error',
-      rawImage: imageUrl // Store cloud URL instead of base64
+      rawImage: imageUrl
     };
 
     if (settings.provider === 'gemini') {
       // Gemini Implementation
-      const apiKey = settings.apiKey || process.env.API_KEY;
-      if (!apiKey) throw new Error("API Key missing for Gemini");
+      addDebugLog('info', '🔵 Using Gemini provider', { model: settings.model || 'gemini-2.5-flash' });
       
+      const apiKey = settings.apiKey || process.env.API_KEY;
+      if (!apiKey) {
+        addDebugLog('error', 'API Key missing for Gemini');
+        throw new Error("API Key missing for Gemini");
+      }
+      
+      addDebugLog('info', 'Initializing Gemini client...');
       const ai = new GoogleGenAI({ apiKey });
       
       let parsedSchema: Schema | undefined;
       try {
         const jsonSchema = JSON.parse(settings.outputSchema);
         parsedSchema = convertSchemaToGemini(jsonSchema);
+        addDebugLog('info', 'Schema parsed successfully', { schema: parsedSchema });
       } catch (e) {
-        console.error("Invalid Schema for Gemini", e);
+        addDebugLog('warn', 'Invalid Schema for Gemini, proceeding without schema', { error: e });
       }
 
-      const response = await ai.models.generateContent({
+      const requestPayload = {
         model: settings.model || 'gemini-2.5-flash',
         contents: {
           parts: [
@@ -139,16 +189,38 @@ export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
           responseSchema: parsedSchema,
           temperature: 0.1,
         }
+      };
+      
+      addDebugLog('info', 'Sending request to Gemini API...', { 
+        model: requestPayload.model,
+        promptLength: settings.systemPrompt.length,
+        hasSchema: !!parsedSchema
       });
 
+      const response = await ai.models.generateContent(requestPayload);
+      
+      addDebugLog('success', 'Received response from Gemini');
+
       const text = response.text;
-      if (!text) throw new Error("No response from Gemini");
+      if (!text) {
+        addDebugLog('error', 'Empty response from Gemini', { response });
+        throw new Error("No response from Gemini");
+      }
+      
+      addDebugLog('info', 'Parsing Gemini response...', { responsePreview: text.substring(0, 100) });
       extractedData = JSON.parse(text);
+      addDebugLog('success', 'Successfully parsed Gemini response', { extractedData });
 
     } else {
       // OpenRouter / Local / OpenAI Compatible Implementation
       const baseUrl = settings.baseUrl || (settings.provider === 'local' ? 'http://localhost:11434/v1' : 'https://openrouter.ai/api/v1');
       const apiKey = settings.apiKey;
+      
+      addDebugLog('info', `🟢 Using ${settings.provider} provider`, { 
+        baseUrl, 
+        model: settings.model,
+        hasApiKey: !!apiKey 
+      });
       
       // For OpenRouter/Local, we usually put schema in prompt
       const systemPromptWithSchema = `${settings.systemPrompt}\n\nYou MUST output valid JSON strictly adhering to this schema:\n${settings.outputSchema}`;
@@ -189,35 +261,65 @@ export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
         headers["X-Title"] = "ReceiptAI";
       }
 
+      addDebugLog('info', 'Sending request to LLM API...', { 
+        url: `${baseUrl}/chat/completions`,
+        model: body.model,
+        headers: Object.keys(headers)
+      });
+
       const res = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers,
         body: JSON.stringify(body)
       });
 
+      addDebugLog('info', `Received response: ${res.status} ${res.statusText}`);
+
       if (!res.ok) {
         const errText = await res.text();
+        addDebugLog('error', `LLM API Error: ${res.status}`, { 
+          status: res.status, 
+          statusText: res.statusText,
+          errorBody: errText 
+        });
         throw new Error(`LLM Error: ${res.status} - ${errText}`);
       }
 
       const json = await res.json();
-      const content = json.choices?.[0]?.message?.content;
-      if (!content) throw new Error("Empty response from LLM");
+      addDebugLog('info', 'Parsing LLM response...', { responseKeys: Object.keys(json) });
       
+      const content = json.choices?.[0]?.message?.content;
+      if (!content) {
+        addDebugLog('error', 'Empty response from LLM', { response: json });
+        throw new Error("Empty response from LLM");
+      }
+      
+      addDebugLog('info', 'Extracting content from response...', { contentPreview: content.substring(0, 100) });
       extractedData = JSON.parse(content);
+      addDebugLog('success', 'Successfully parsed LLM response', { extractedData });
     }
 
+    addDebugLog('success', `✅ Extraction completed for: ${file.name}`);
+    
     return {
       ...defaultResult,
-      status: 'draft', // Default to draft for human review
+      status: 'draft',
       ...extractedData,
     };
 
   } catch (error) {
-    console.error("Extraction Error:", error);
+    const errorMessage = (error as Error).message;
+    addDebugLog('error', `❌ Extraction failed for: ${file.name}`, { 
+      error: errorMessage,
+      stack: (error as Error).stack 
+    });
+    
     return {
-        ...defaultResult,
-        error: (error as Error).message
+      id: baseId,
+      createdAt: Date.now(),
+      status: 'error',
+      rawImage: URL.createObjectURL(file),
+      error: errorMessage
     };
   }
 };
