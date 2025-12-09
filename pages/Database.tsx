@@ -65,7 +65,7 @@ const DatabasePage: React.FC = () => {
   
   // Multi-select State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
   
   // Connect to global context to detect updates
   const { lastUpdated } = useProcessing();
@@ -245,78 +245,73 @@ const DatabasePage: React.FC = () => {
           <p className="text-slate-600 mt-1">Review and approve extracted receipts.</p>
         </div>
         <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                  setIsSelectionMode(!isSelectionMode);
-                  if (isSelectionMode) setSelectedIds(new Set());
-              }}
-              className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                isSelectionMode 
-                  ? 'bg-brand-600 text-white border-brand-600 hover:bg-brand-700' 
-                  : 'text-slate-700 bg-white border-slate-300 hover:bg-slate-50'
-              }`}
-            >
-              {isSelectionMode ? 'Cancel Selection' : 'Select Multiple'}
-            </button>
-            {isSelectionMode && selectedIds.size > 0 && (
+            {(selectedIds.size > 0 || isExiting) && (
               <>
                 <button
-                  onClick={handleExportSelected}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm font-medium transition-colors"
+                  onClick={() => {
+                    setIsExiting(true);
+                    setTimeout(() => {
+                      setSelectedIds(new Set());
+                      setIsExiting(false);
+                    }, 200);
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border font-medium transition-all text-slate-700 bg-white border-slate-300 hover:bg-slate-50 whitespace-nowrap shadow-sm ${
+                    isExiting ? 'animate-[fadeOut_0.2s_ease-in]' : 'animate-[fadeIn_0.3s_ease-out]'
+                  }`}
                 >
-                  <Download size={18} />
-                  Export ({selectedIds.size})
+                  Clear ({selectedIds.size})
                 </button>
                 <button
                   onClick={handleGeneratePDF}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-medium transition-colors"
+                  className={`flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-medium transition-all whitespace-nowrap ${
+                    isExiting ? 'animate-[fadeOut_0.2s_ease-in]' : 'animate-[fadeIn_0.3s_ease-out]'
+                  }`}
+                  disabled={isExiting}
                 >
                   <FileText size={18} />
-                  Generate PDF ({selectedIds.size})
-                </button>
-              </>
-            )}
-            {!isSelectionMode && (
-              <>
-                <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-medium transition-colors cursor-pointer">
-                  <UploadIcon size={18} />
-                  Import JSON
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleImportJSON}
-                    className="hidden"
-                  />
-                </label>
-                <button
-                  onClick={exportDatabaseJSON}
-                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow-sm font-medium transition-colors"
-                  title="Export database with images as JSON"
-                >
-                  <DatabaseIcon size={18} />
-                  Export JSON
+                  Generate PDF
                 </button>
                 <button
-                  onClick={() => exportToExcel(data)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm font-medium transition-colors"
-                  title="Export as Excel spreadsheet"
+                  onClick={handleExportSelected}
+                  className={`flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm font-medium transition-all whitespace-nowrap ${
+                    isExiting ? 'animate-[fadeOut_0.2s_ease-in]' : 'animate-[fadeIn_0.3s_ease-out]'
+                  }`}
+                  disabled={isExiting}
                 >
                   <Download size={18} />
                   Export Excel
                 </button>
-                <button
-                  onClick={() => {
-                      if(confirm("Clear all data?")) {
-                          clearDatabase();
-                          setData([]);
-                      }
-                  }}
-                  className="px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 text-sm font-medium transition-colors"
-                >
-                  Clear DB
-                </button>
               </>
             )}
+            <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-medium transition-all cursor-pointer whitespace-nowrap">
+              <UploadIcon size={18} />
+              Import JSON
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleImportJSON}
+                className="hidden"
+              />
+            </label>
+            <button
+              onClick={exportDatabaseJSON}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow-sm font-medium transition-all whitespace-nowrap"
+              title="Export database with images as JSON"
+            >
+              <DatabaseIcon size={18} />
+              Export JSON
+            </button>
+            <button
+              onClick={() => {
+                  if(confirm("Clear all data?")) {
+                      clearDatabase();
+                      setData([]);
+                  }
+              }}
+              className="flex items-center gap-2 px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 font-medium transition-all whitespace-nowrap shadow-sm"
+            >
+              Clear DB
+            </button>
         </div>
       </div>
 
@@ -357,16 +352,14 @@ const DatabasePage: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider font-semibold">
-                {isSelectionMode && (
-                  <th className="p-4 w-12">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.size === processedData.length && processedData.length > 0}
-                      onChange={toggleSelectAll}
-                      className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500 cursor-pointer"
-                    />
-                  </th>
-                )}
+                <th className="p-4 w-12">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === processedData.length && processedData.length > 0}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500 cursor-pointer"
+                  />
+                </th>
                 <th 
                     className="p-4 w-24 cursor-pointer hover:bg-slate-100 transition-colors select-none"
                     onClick={() => handleSort('status')}
@@ -403,7 +396,7 @@ const DatabasePage: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {processedData.length === 0 ? (
                 <tr>
-                    <td colSpan={columns.length + 3 + (isSelectionMode ? 1 : 0)} className="p-12 text-center text-slate-500">
+                    <td colSpan={columns.length + 4} className="p-12 text-center text-slate-500">
                         <div className="flex flex-col items-center gap-2">
                             <Search size={32} className="text-slate-300" />
                             <p>No receipts found matching your filters.</p>
@@ -414,36 +407,26 @@ const DatabasePage: React.FC = () => {
                 processedData.map((receipt) => (
                   <tr 
                     key={receipt.id} 
-                    onClick={(e) => {
-                      if (isSelectionMode) {
-                        e.stopPropagation();
-                        toggleSelection(receipt.id);
-                      } else {
-                        setSelectedReceipt(receipt);
-                      }
-                    }}
                     className={`hover:bg-brand-50 transition-colors cursor-pointer group ${
                       selectedIds.has(receipt.id) ? 'bg-brand-100' : ''
                     }`}
                   >
-                    {isSelectionMode && (
-                      <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(receipt.id)}
-                          onChange={() => toggleSelection(receipt.id)}
-                          className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500 cursor-pointer"
-                        />
-                      </td>
-                    )}
-                    <td className="p-4">
+                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(receipt.id)}
+                        onChange={() => toggleSelection(receipt.id)}
+                        className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500 cursor-pointer"
+                      />
+                    </td>
+                    <td className="p-4" onClick={() => setSelectedReceipt(receipt)}>
                       <StatusBadge status={receipt.status} />
                     </td>
-                    <td className="p-4 text-sm text-slate-500 whitespace-nowrap font-mono">
+                    <td className="p-4 text-sm text-slate-500 whitespace-nowrap font-mono" onClick={() => setSelectedReceipt(receipt)}>
                         {formatDateTime(receipt.createdAt)}
                     </td>
                     {columns.map(col => (
-                        <td key={col.key} className="p-4 text-sm text-slate-700">
+                        <td key={col.key} className="p-4 text-sm text-slate-700" onClick={() => setSelectedReceipt(receipt)}>
                             <span className="block truncate max-w-[200px]">
                                 {/* Apply custom formatting to date columns */}
                                 {(col.key.toLowerCase().includes('date') || col.key === 'transactionDate') 
@@ -454,16 +437,14 @@ const DatabasePage: React.FC = () => {
                         </td>
                     ))}
                     <td className="p-4 text-center">
-                        {!isSelectionMode && (
-                          <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button className="text-brand-600 hover:text-brand-700 p-1" title="Review">
-                                  <Eye size={18} />
-                              </button>
-                              <button onClick={(e) => handleDelete(receipt.id, e)} className="text-red-400 hover:text-red-600 p-1" title="Delete">
-                                  <Trash2 size={18} />
-                              </button>
-                          </div>
-                        )}
+                      <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => setSelectedReceipt(receipt)} className="text-brand-600 hover:text-brand-700 p-1" title="Review">
+                              <Eye size={18} />
+                          </button>
+                          <button onClick={(e) => handleDelete(receipt.id, e)} className="text-red-400 hover:text-red-600 p-1" title="Delete">
+                              <Trash2 size={18} />
+                          </button>
+                      </div>
                     </td>
                   </tr>
                 ))
