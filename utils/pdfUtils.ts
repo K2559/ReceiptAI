@@ -195,6 +195,55 @@ export const generatePDFReport = (
       yPosition = (doc as any).lastAutoTable.finalY + 10;
     }
 
+    // Original Receipt Image (if available)
+    if (receipt.rawImage) {
+      try {
+        const imgData = receipt.rawImage.startsWith('data:') 
+          ? receipt.rawImage 
+          : `data:image/jpeg;base64,${receipt.rawImage}`;
+        
+        // Create a temporary image to get dimensions
+        const img = new Image();
+        img.src = imgData;
+        
+        // Calculate available space
+        const maxImageWidth = pageWidth - 28; // 14px margin on each side
+        const maxImageHeight = pageHeight - yPosition - 30; // Leave space for footer
+        
+        if (maxImageHeight > 50) { // Only add if there's reasonable space
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Original Receipt Image', 14, yPosition);
+          yPosition += 8;
+          
+          // Get image properties using getImageProperties
+          const imgProps = doc.getImageProperties(imgData);
+          const imgWidth = imgProps.width;
+          const imgHeight = imgProps.height;
+          const imgRatio = imgWidth / imgHeight;
+          
+          // Calculate dimensions maintaining aspect ratio
+          let finalWidth = maxImageWidth;
+          let finalHeight = finalWidth / imgRatio;
+          
+          // If height exceeds available space, scale by height instead
+          if (finalHeight > maxImageHeight) {
+            finalHeight = maxImageHeight;
+            finalWidth = finalHeight * imgRatio;
+          }
+          
+          // Center the image horizontally if it's smaller than max width
+          const xPosition = 14 + (maxImageWidth - finalWidth) / 2;
+          
+          doc.addImage(imgData, 'JPEG', xPosition, yPosition, finalWidth, finalHeight);
+          yPosition += finalHeight + 5;
+        }
+      } catch (error) {
+        console.error('Error adding receipt image to PDF:', error);
+        // Continue without the image if there's an error
+      }
+    }
+
     // Additional Notes (if available)
     if (receipt.notes) {
       if (yPosition > pageHeight - 40) {

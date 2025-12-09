@@ -81,13 +81,24 @@ To use ReceiptAI, you need a Google Gemini API key:
 
 ## 🚀 Deployment
 
-### GitHub Pages
+### GitHub Pages (Automatic)
 
 This project is configured for automatic deployment to GitHub Pages:
 
-1. Push your code to the `main` branch
-2. GitHub Actions will automatically build and deploy
-3. Your app will be available at `https://yourusername.github.io/ReceiptAI/`
+1. **Enable GitHub Pages**:
+   - Go to your repository Settings → Pages
+   - Under "Build and deployment", select "GitHub Actions" as the source
+
+2. **Add API Key Secret**:
+   - Go to Settings → Secrets and variables → Actions
+   - Click "New repository secret"
+   - Name: `GEMINI_API_KEY`
+   - Value: Your Google Gemini API key
+
+3. **Deploy**:
+   - Push your code to the `main` branch
+   - GitHub Actions will automatically build and deploy
+   - Your app will be available at `https://yourusername.github.io/ReceiptAI/`
 
 ### Manual Deployment
 
@@ -95,6 +106,13 @@ This project is configured for automatic deployment to GitHub Pages:
 npm run build
 npm run deploy
 ```
+
+## 🔄 CI/CD
+
+The project includes two GitHub Actions workflows:
+
+- **CI** (`ci.yml`): Runs on pull requests and pushes to validate builds
+- **Deploy** (`deploy.yml`): Automatically deploys to GitHub Pages on push to main
 
 ## 📁 Project Structure
 
