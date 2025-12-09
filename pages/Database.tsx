@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { getReceipts, updateReceipt, deleteReceipt, clearDatabase } from '../services/storageService';
+import { getReceipts, updateReceipt, deleteReceipt, clearDatabase, exportDatabaseJSON, importDatabaseJSON } from '../services/storageService';
 import { getSettings } from '../services/settingsService';
 import { exportToExcel } from '../utils/excelUtils';
 import { generatePDFReport } from '../utils/pdfUtils';
 import { ReceiptData, ReceiptStatus } from '../types';
-import { Download, Trash2, Eye, Search, Check, X, ZoomIn, ZoomOut, RotateCcw, Save, ChevronUp, ChevronDown, ChevronsUpDown, Filter, FileText } from 'lucide-react';
+import { Download, Trash2, Eye, Search, Check, X, ZoomIn, ZoomOut, RotateCcw, Save, ChevronUp, ChevronDown, ChevronsUpDown, Filter, FileText, Upload as UploadIcon, Database as DatabaseIcon } from 'lucide-react';
 import { useProcessing } from '../context/ProcessingContext';
 
 // --- Helper Components ---
@@ -179,6 +179,21 @@ const DatabasePage: React.FC = () => {
     exportToExcel(selectedReceipts);
   };
 
+  const handleImportJSON = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    try {
+      const imported = await importDatabaseJSON(file);
+      setData(imported);
+      alert(`Successfully imported ${imported.length} receipts (duplicates were skipped)`);
+    } catch (error) {
+      alert(`Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+    // Reset input so the same file can be imported again
+    e.target.value = '';
+  };
+
   // Process Data: Filter -> Sort
   const processedData = useMemo(() => {
     let result = [...data];
@@ -263,6 +278,32 @@ const DatabasePage: React.FC = () => {
             )}
             {!isSelectionMode && (
               <>
+                <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-medium transition-colors cursor-pointer">
+                  <UploadIcon size={18} />
+                  Import JSON
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportJSON}
+                    className="hidden"
+                  />
+                </label>
+                <button
+                  onClick={exportDatabaseJSON}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow-sm font-medium transition-colors"
+                  title="Export database with images as JSON"
+                >
+                  <DatabaseIcon size={18} />
+                  Export JSON
+                </button>
+                <button
+                  onClick={() => exportToExcel(data)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm font-medium transition-colors"
+                  title="Export as Excel spreadsheet"
+                >
+                  <Download size={18} />
+                  Export Excel
+                </button>
                 <button
                   onClick={() => {
                       if(confirm("Clear all data?")) {
@@ -273,13 +314,6 @@ const DatabasePage: React.FC = () => {
                   className="px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 text-sm font-medium transition-colors"
                 >
                   Clear DB
-                </button>
-                <button
-                  onClick={() => exportToExcel(data)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm font-medium transition-colors"
-                >
-                  <Download size={18} />
-                  Export All
                 </button>
               </>
             )}

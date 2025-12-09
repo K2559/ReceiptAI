@@ -17,6 +17,7 @@ A modern web application that uses AI to digitize and manage receipts automatica
 - 💾 **Local Storage** - All data stored locally in your browser
 - 📊 **Excel Export** - Export receipts to Excel spreadsheets
 - 📄 **PDF Reports** - Generate professional PDF reports with multi-select
+- � **JeSON Backup** - Export/import complete database with images as base64
 - 🔍 **Search & Filter** - Easily find receipts by merchant, date, or status
 - ⚙️ **Customizable Settings** - Configure AI provider and API settings
 
@@ -78,6 +79,13 @@ To use ReceiptAI, you need a Google Gemini API key:
 3. **Review & Edit**: Review the extracted data and make any necessary corrections
 4. **Save**: Save the receipt to your local database
 5. **Export**: Generate Excel or PDF reports from the Database page
+
+### Data Backup & Restore
+
+- **Export JSON**: Click "Export JSON" to download your complete database including all images as base64
+- **Import JSON**: Click "Import JSON" to restore a previously exported database file
+- The import process automatically skips duplicate receipts based on ID
+- JSON exports preserve all data including receipt images for complete backup
 
 ## 🚀 Deployment
 
