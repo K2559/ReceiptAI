@@ -1,8 +1,9 @@
 import React, { useCallback } from 'react';
-import { Upload as UploadIcon, X, FileText, Loader2, CheckCircle, AlertCircle, Terminal } from 'lucide-react';
+import { Upload as UploadIcon, X, FileText, Loader2, CheckCircle, AlertCircle, Terminal, AlertTriangle } from 'lucide-react';
 import { useProcessing } from '../context/ProcessingContext';
 import { useNavigate } from 'react-router-dom';
 import DebugLogViewer from '../components/DebugLogViewer';
+import { getStorageWarning } from '../utils/storageUtils';
 
 const UploadPage: React.FC = () => {
   const { 
@@ -19,6 +20,7 @@ const UploadPage: React.FC = () => {
   const [isDragging, setIsDragging] = React.useState(false);
   const [showDebugLogs, setShowDebugLogs] = React.useState(false);
   const navigate = useNavigate();
+  const storageWarning = getStorageWarning();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -75,6 +77,28 @@ const UploadPage: React.FC = () => {
       </div>
 
       <DebugLogViewer isOpen={showDebugLogs} onClose={() => setShowDebugLogs(false)} />
+
+      {/* Storage Warning */}
+      {storageWarning && (
+        <div className={`mb-6 p-4 rounded-lg border-2 flex items-start gap-3 ${
+          storageWarning.level === 'critical' 
+            ? 'bg-red-50 border-red-300 text-red-800' 
+            : 'bg-yellow-50 border-yellow-300 text-yellow-800'
+        }`}>
+          <AlertTriangle className="flex-shrink-0 mt-0.5" size={20} />
+          <div className="flex-1">
+            <p className="font-medium text-sm">{storageWarning.message}</p>
+            <button
+              onClick={() => navigate('/settings')}
+              className={`mt-2 text-xs font-medium underline ${
+                storageWarning.level === 'critical' ? 'text-red-900' : 'text-yellow-900'
+              }`}
+            >
+              Configure Cloud Storage →
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Drop Zone */}
       <div

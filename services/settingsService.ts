@@ -38,7 +38,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   imageStorage: 'imgbb',
   imgbbApiKey: '',
   cloudinaryCloudName: '',
-  cloudinaryUploadPreset: ''
+  cloudinaryUploadPreset: '',
+  concurrentApiCalls: 10
 };
 
 export const getSettings = (): AppSettings => {

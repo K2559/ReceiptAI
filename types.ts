@@ -37,4 +37,5 @@ export interface AppSettings {
   imgbbApiKey?: string;
   cloudinaryCloudName?: string;
   cloudinaryUploadPreset?: string;
+  concurrentApiCalls: number; // Number of concurrent LLM API calls
 }

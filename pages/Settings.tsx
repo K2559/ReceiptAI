@@ -2,6 +2,28 @@ import React, { useState, useEffect } from 'react';
 import { getSettings, saveSettings, resetSettings } from '../services/settingsService';
 import { AppSettings, LLMProvider, ImageStorageProvider } from '../types';
 import { Save, RotateCcw, CheckCircle } from 'lucide-react';
+import { getStorageUsage } from '../utils/storageUtils';
+
+const StorageUsageBar: React.FC = () => {
+  const usage = getStorageUsage();
+  const percent = parseFloat(usage.percentUsed);
+  const color = percent > 90 ? 'bg-red-600' : percent > 70 ? 'bg-yellow-600' : 'bg-green-600';
+  
+  return (
+    <div className="mt-3">
+      <div className="flex justify-between text-xs text-red-800 mb-1">
+        <span>Storage Used</span>
+        <span className="font-semibold">{usage.usedMB}MB / ~10MB ({usage.percentUsed}%)</span>
+      </div>
+      <div className="w-full bg-red-200 rounded-full h-2">
+        <div 
+          className={`${color} h-2 rounded-full transition-all duration-300`}
+          style={{ width: `${Math.min(percent, 100)}%` }}
+        />
+      </div>
+    </div>
+  );
+};
 
 const SettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(getSettings());
@@ -130,6 +152,21 @@ const SettingsPage: React.FC = () => {
                             className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
                         />
                     </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Concurrent API Calls</label>
+                        <input 
+                            type="number"
+                            min="1"
+                            max="50"
+                            value={settings.concurrentApiCalls}
+                            onChange={(e) => handleChange('concurrentApiCalls', parseInt(e.target.value) || 10)}
+                            className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                        />
+                        <p className="text-xs text-slate-500 mt-1">
+                            Number of receipts to process simultaneously (1-50)
+                        </p>
+                    </div>
                 </div>
             </div>
 
@@ -206,10 +243,20 @@ const SettingsPage: React.FC = () => {
                     )}
 
                     {settings.imageStorage === 'local' && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                            <p className="text-xs text-amber-800">
-                                ⚠️ Local storage has a 5-10MB limit. Images may be lost if storage is full. Use cloud storage for production.
+                        <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+                            <p className="text-sm font-semibold text-red-900 mb-2">
+                                ⚠️ Warning: Local Storage Limitations
                             </p>
+                            <ul className="text-xs text-red-800 space-y-1 list-disc list-inside">
+                                <li>Browser storage limit: 5-10MB total</li>
+                                <li>Images stored as base64 (very large)</li>
+                                <li>Data may be lost when storage is full</li>
+                                <li>Not suitable for production use</li>
+                            </ul>
+                            <p className="text-xs text-red-900 font-medium mt-3">
+                                💡 Recommended: Use ImgBB (free, unlimited) or Cloudinary (free 25GB)
+                            </p>
+                            <StorageUsageBar />
                         </div>
                     )}
                 </div>

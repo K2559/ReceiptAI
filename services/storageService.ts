@@ -12,10 +12,34 @@ export const saveReceipts = (receipts: ReceiptData[]) => {
 };
 
 export const addReceipt = (receipt: ReceiptData) => {
-  const current = getReceipts();
-  const updated = [receipt, ...current];
-  saveReceipts(updated);
-  return updated;
+  try {
+    const current = getReceipts();
+    const updated = [receipt, ...current];
+    saveReceipts(updated);
+    return updated;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      // Try to free up space by removing base64 images from older receipts
+      console.warn('Storage quota exceeded, attempting to optimize...');
+      const current = getReceipts();
+      
+      // Remove rawImage from older receipts to free space
+      const optimized = current.map(r => {
+        if (r.rawImage && r.rawImage.startsWith('data:')) {
+          return { ...r, rawImage: undefined };
+        }
+        return r;
+      });
+      
+      saveReceipts(optimized);
+      
+      // Now try to add the new receipt
+      const updated = [receipt, ...optimized];
+      saveReceipts(updated);
+      return updated;
+    }
+    throw error;
+  }
 };
 
 export const updateReceipt = (id: string, updates: Partial<ReceiptData>) => {

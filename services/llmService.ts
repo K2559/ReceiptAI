@@ -118,9 +118,10 @@ const uploadImageToCloud = async (file: File): Promise<string> => {
       throw new Error('Using local storage');
     }
   } catch (error) {
-    addDebugLog('warn', 'Cloud upload failed, falling back to local base64 storage', { error: (error as Error).message });
-    const base64 = await fileToBase64(file);
-    return `data:${file.type};base64,${base64}`;
+    addDebugLog('warn', 'Cloud upload failed, using object URL instead of base64 to save storage', { error: (error as Error).message });
+    // Use object URL instead of base64 to avoid localStorage quota issues
+    // Note: This URL is temporary and only valid during the session
+    return URL.createObjectURL(file);
   }
 };
 
@@ -139,8 +140,18 @@ export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
     
     // Upload image to cloud storage first
     addDebugLog('info', 'Uploading image to cloud storage...');
-    const imageUrl = await uploadImageToCloud(file);
-    addDebugLog('success', 'Image uploaded successfully', { url: imageUrl.substring(0, 50) + '...' });
+    let imageUrl: string;
+    try {
+      imageUrl = await uploadImageToCloud(file);
+      addDebugLog('success', 'Image uploaded successfully', { 
+        url: imageUrl.substring(0, 50) + '...',
+        isBase64: imageUrl.startsWith('data:'),
+        isObjectURL: imageUrl.startsWith('blob:')
+      });
+    } catch (uploadError) {
+      addDebugLog('warn', 'Image upload failed, using temporary object URL', { error: (uploadError as Error).message });
+      imageUrl = URL.createObjectURL(file);
+    }
     
     // Get base64 for LLM processing
     const base64Data = await fileToBase64(file);
@@ -295,17 +306,70 @@ export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
       }
       
       addDebugLog('info', 'Extracting content from response...', { contentPreview: content.substring(0, 100) });
-      extractedData = JSON.parse(content);
-      addDebugLog('success', 'Successfully parsed LLM response', { extractedData });
+      
+      try {
+        // Try to clean up the content if it has markdown code blocks
+        let cleanContent = content.trim();
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+          addDebugLog('info', 'Removed markdown code block wrapper');
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/```\s*$/, '');
+          addDebugLog('info', 'Removed code block wrapper');
+        }
+        
+        extractedData = JSON.parse(cleanContent);
+        addDebugLog('success', 'Successfully parsed LLM response', { 
+          dataKeys: Object.keys(extractedData),
+          sampleFields: {
+            hasId: !!extractedData.id,
+            hasMerchant: !!(extractedData.merchant || extractedData.merchantName),
+            hasTotal: !!(extractedData.total || extractedData.totalAmount),
+            hasDate: !!(extractedData.date || extractedData.transactionDate)
+          }
+        });
+      } catch (parseError) {
+        addDebugLog('error', 'Failed to parse JSON from LLM response', { 
+          rawContent: content.substring(0, 300),
+          error: (parseError as Error).message 
+        });
+        throw new Error(`JSON parse error: ${(parseError as Error).message}`);
+      }
     }
 
+    // Validate that we have some meaningful data
+    if (!extractedData || Object.keys(extractedData).length === 0) {
+      addDebugLog('error', '❌ Extracted data is empty', { extractedData });
+      return {
+        ...defaultResult,
+        status: 'error',
+        error: 'No data extracted from receipt'
+      };
+    }
+    
     addDebugLog('success', `✅ Extraction completed for: ${file.name}`);
     
-    return {
+    const finalResult = {
       ...defaultResult,
-      status: 'draft',
+      status: 'draft' as const,
       ...extractedData,
+      id: baseId, // Ensure our ID is preserved
+      createdAt: Date.now(), // Ensure timestamp is preserved
+      rawImage: imageUrl // Ensure image URL is preserved
     };
+    
+    addDebugLog('info', 'Final result prepared', { 
+      id: finalResult.id,
+      status: finalResult.status,
+      fieldCount: Object.keys(finalResult).length,
+      hasRequiredFields: {
+        id: !!finalResult.id,
+        status: !!finalResult.status,
+        rawImage: !!finalResult.rawImage
+      }
+    });
+    
+    return finalResult;
 
   } catch (error) {
     const errorMessage = (error as Error).message;

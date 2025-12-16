@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { extractReceiptData } from '../services/llmService';
+import { extractReceiptData, addDebugLog } from '../services/llmService';
 import { addReceipt } from '../services/storageService';
 
 export interface QueueItem {
@@ -82,23 +82,87 @@ export const ProcessingProvider: React.FC<{ children: ReactNode }> = ({ children
             await Promise.all(batch.map(async (item) => {
                 updateItemStatus(item.id, 'processing');
                 try {
-                    addLog(`Analyzing ${item.file.name}...`);
+                    addLog(`📤 Analyzing ${item.file.name}...`);
+                    addDebugLog('info', `[ProcessingContext] Starting processing for ${item.file.name}`);
+                    
                     const data = await extractReceiptData(item.file);
-                    addReceipt(data);
                     
-                    // Trigger DB refresh in other components
-                    setLastUpdated(Date.now());
+                    // Debug: Log what we got back
+                    console.log(`[DEBUG] Extracted data for ${item.file.name}:`, data);
+                    addDebugLog('info', `[ProcessingContext] Received data from extraction`, {
+                        fileName: item.file.name,
+                        hasId: !!data.id,
+                        hasStatus: !!data.status,
+                        hasCreatedAt: !!data.createdAt,
+                        status: data.status,
+                        dataKeys: Object.keys(data)
+                    });
                     
+                    // Validate required fields
+                    const hasRequiredFields = data.id && data.status && data.createdAt;
+                    if (!hasRequiredFields) {
+                        const missing = [];
+                        if (!data.id) missing.push('id');
+                        if (!data.status) missing.push('status');
+                        if (!data.createdAt) missing.push('createdAt');
+                        
+                        addDebugLog('error', `[ProcessingContext] Validation failed: Missing required fields`, {
+                            fileName: item.file.name,
+                            missing,
+                            receivedData: data
+                        });
+                        updateItemStatus(item.id, 'error', `Missing required fields: ${missing.join(', ')}`);
+                        addLog(`❌ Validation failed for ${item.file.name}: Missing ${missing.join(', ')}`);
+                        return;
+                    }
+                    
+                    // Check if extraction actually failed
                     if (data.status === 'error') {
-                        updateItemStatus(item.id, 'error', 'Extraction returned error');
-                        addLog(`❌ Error processing ${item.file.name}`);
+                        addDebugLog('error', `[ProcessingContext] Data status is error`, {
+                            fileName: item.file.name,
+                            error: data.error
+                        });
+                        updateItemStatus(item.id, 'error', data.error || 'Extraction returned error status');
+                        addLog(`❌ Extraction error: ${item.file.name} - ${data.error || 'Unknown error'}`);
                     } else {
+                        // Save to database
+                        addDebugLog('info', `[ProcessingContext] Saving to database`, {
+                            fileName: item.file.name,
+                            receiptId: data.id
+                        });
+                        
+                        try {
+                            addReceipt(data);
+                            addDebugLog('success', `[ProcessingContext] Successfully saved to database`, {
+                                fileName: item.file.name,
+                                receiptId: data.id
+                            });
+                        } catch (dbError) {
+                            addDebugLog('error', `[ProcessingContext] Database save failed`, {
+                                fileName: item.file.name,
+                                error: (dbError as Error).message
+                            });
+                            throw dbError;
+                        }
+                        
+                        // Trigger DB refresh in other components
+                        setLastUpdated(Date.now());
+                        
                         updateItemStatus(item.id, 'completed');
-                        addLog(`✅ Successfully extracted ${item.file.name}`);
+                        addLog(`✅ Successfully processed ${item.file.name}`);
+                        addDebugLog('success', `[ProcessingContext] ✅ Processing completed for ${item.file.name}`);
                     }
                 } catch (e) {
-                    updateItemStatus(item.id, 'error', (e as Error).message);
-                    addLog(`❌ Critical failure: ${item.file.name}`);
+                    const errorMsg = (e as Error).message;
+                    const errorStack = (e as Error).stack;
+                    console.error(`[ERROR] Processing ${item.file.name}:`, e);
+                    addDebugLog('error', `[ProcessingContext] Critical failure during processing`, {
+                        fileName: item.file.name,
+                        error: errorMsg,
+                        stack: errorStack
+                    });
+                    updateItemStatus(item.id, 'error', errorMsg);
+                    addLog(`❌ Critical failure: ${item.file.name} - ${errorMsg}`);
                 }
             }));
             
