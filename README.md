@@ -128,8 +128,37 @@ npm run deploy
 
 The project includes two GitHub Actions workflows:
 
-- **CI** (`ci.yml`): Runs on pull requests and pushes to validate builds
-- **Deploy** (`deploy.yml`): Automatically deploys to GitHub Pages on push to main
+### CI Workflow (`ci.yml`)
+- **Triggers**: Pull requests and pushes to main branch
+- **Actions**:
+  - Installs dependencies
+  - Runs TypeScript type checking
+  - Builds the application
+  - Verifies build artifacts
+  - Uploads build artifacts for review
+
+### Deploy Workflow (`deploy.yml`)
+- **Triggers**: Push to main branch or manual workflow dispatch
+- **Actions**:
+  - Builds the application with production settings
+  - Validates build output
+  - Deploys to GitHub Pages automatically
+  - Provides deployment URL in workflow logs
+
+### Setting Up GitHub Actions
+
+1. **Enable GitHub Pages**:
+   - Go to repository Settings → Pages
+   - Under "Build and deployment", select "GitHub Actions"
+
+2. **Add Required Secrets**:
+   - Go to Settings → Secrets and variables → Actions
+   - Add `GEMINI_API_KEY` with your Google Gemini API key
+
+3. **Workflow Permissions**:
+   - Go to Settings → Actions → General
+   - Under "Workflow permissions", select "Read and write permissions"
+   - Check "Allow GitHub Actions to create and approve pull requests"
 
 ## 📁 Project Structure
 

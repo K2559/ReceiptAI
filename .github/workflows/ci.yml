@@ -32,7 +32,7 @@ jobs:
       - name: Build application
         run: npm run build
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Verify build artifacts
         run: |
@@ -43,3 +43,12 @@ jobs:
           echo "✅ Build successful!"
           echo "📦 Build size:"
           du -sh dist
+          echo "📁 Files generated:"
+          ls -lh dist/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: dist/
+          retention-days: 7
