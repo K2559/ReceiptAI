@@ -20,6 +20,38 @@ const containsChinese = (text: string): boolean => {
   return /[\u4e00-\u9fa5]/.test(text);
 };
 
+// Helper to convert text to image for Chinese character support
+const textToImage = (text: string, fontSize: number): string | null => {
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    
+    // Set font and measure text
+    ctx.font = `${fontSize}px sans-serif`;
+    const metrics = ctx.measureText(text);
+    
+    // Set canvas size with padding
+    canvas.width = Math.ceil(metrics.width) + 4;
+    canvas.height = Math.ceil(fontSize * 1.5);
+    
+    // Clear and set background
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw text
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.fillStyle = 'black';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 2, canvas.height / 2);
+    
+    return canvas.toDataURL('image/png');
+  } catch (error) {
+    console.warn('Failed to convert text to image:', error);
+    return null;
+  }
+};
+
 // Helper to safely render text (with Chinese character support)
 const safeText = (doc: jsPDF, text: string, x: number, y: number, options?: any) => {
   try {
