@@ -1,25 +1,73 @@
 /**
  * PDF Report Generator with Chinese Character Support
  * 
- * This utility uses pdfmake-with-chinese-fonts package which provides:
- * - Full Chinese (Simplified & Traditional) character support
- * - Selectable and copyable text (not images)
- * - High-quality font rendering
- * - Support for mixed English and Chinese text
- * 
- * The Chinese font is embedded in the PDF, ensuring consistent rendering
- * across all PDF viewers and platforms.
+ * Uses pdfmake with dynamically loaded Chinese font (Noto Sans SC)
  */
 
 import pdfMake from 'pdfmake/build/pdfmake';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 import { ReceiptData } from '../types';
 
-// Set up fonts - handle different module formats
+// Set up default fonts - handle different module formats
 const vfs = (pdfFonts as any)?.pdfMake?.vfs || (pdfFonts as any)?.vfs || (pdfFonts as any)?.default?.pdfMake?.vfs;
 if (vfs) {
   (pdfMake as any).vfs = vfs;
 }
+
+// Chinese font loading state
+let chineseFontLoaded = false;
+let chineseFontLoading = false;
+
+// Load Chinese font from CDN
+const loadChineseFont = async (): Promise<boolean> => {
+  if (chineseFontLoaded) return true;
+  if (chineseFontLoading) {
+    // Wait for existing load
+    while (chineseFontLoading) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+    return chineseFontLoaded;
+  }
+  
+  chineseFontLoading = true;
+  
+  try {
+    // Use Noto Sans SC from a reliable CDN
+    const fontUrl = 'https://cdn.jsdelivr.net/npm/noto-sans-sc@1.0.1/fonts/NotoSansSC-Regular.otf';
+    
+    const response = await fetch(fontUrl);
+    if (!response.ok) throw new Error('Failed to fetch font');
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const base64 = btoa(
+      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
+    
+    // Add to pdfMake vfs
+    (pdfMake as any).vfs = (pdfMake as any).vfs || {};
+    (pdfMake as any).vfs['NotoSansSC-Regular.otf'] = base64;
+    
+    // Register the font
+    (pdfMake as any).fonts = {
+      ...(pdfMake as any).fonts,
+      NotoSansSC: {
+        normal: 'NotoSansSC-Regular.otf',
+        bold: 'NotoSansSC-Regular.otf',
+        italics: 'NotoSansSC-Regular.otf',
+        bolditalics: 'NotoSansSC-Regular.otf'
+      }
+    };
+    
+    chineseFontLoaded = true;
+    console.log('Chinese font loaded successfully');
+    return true;
+  } catch (error) {
+    console.warn('Failed to load Chinese font:', error);
+    return false;
+  } finally {
+    chineseFontLoading = false;
+  }
+};
 
 interface PDFOptions {
   title?: string;
@@ -80,7 +128,7 @@ const getValidImageData = (imageData: string | undefined | null): string | null 
   return null;
 };
 
-export const generatePDFReport = (
+export const generatePDFReport = async (
   receipts: ReceiptData[],
   options: PDFOptions = {}
 ) => {
@@ -90,6 +138,11 @@ export const generatePDFReport = (
     alert('No receipts selected for PDF generation');
     return;
   }
+
+  // Try to load Chinese font
+  const hasChineseFont = await loadChineseFont();
+  const fontName = hasChineseFont ? 'NotoSansSC' : 'Roboto';
+  console.log('Using font:', fontName);
 
   try {
 
@@ -279,7 +332,7 @@ export const generatePDFReport = (
     },
     defaultStyle: {
       fontSize: 10,
-      font: 'Roboto'
+      font: fontName
     },
     pageMargins: [40, 40, 40, 40],
     footer: (currentPage: number, pageCount: number) => {
