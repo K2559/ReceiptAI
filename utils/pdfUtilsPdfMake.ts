@@ -12,21 +12,14 @@
  */
 
 import pdfMake from 'pdfmake/build/pdfmake';
-import pdfFonts from 'pdfmake/build/vfs_fonts';
+import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 import { ReceiptData } from '../types';
 
-// Set up fonts
-(pdfMake as any).vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts.vfs;
-
-// Use default Roboto fonts from pdfmake
-(pdfMake as any).fonts = {
-  Roboto: {
-    normal: 'Roboto-Regular.ttf',
-    bold: 'Roboto-Medium.ttf',
-    italics: 'Roboto-Italic.ttf',
-    bolditalics: 'Roboto-MediumItalic.ttf'
-  }
-};
+// Set up fonts - handle different module formats
+const vfs = (pdfFonts as any)?.pdfMake?.vfs || (pdfFonts as any)?.vfs || (pdfFonts as any)?.default?.pdfMake?.vfs;
+if (vfs) {
+  (pdfMake as any).vfs = vfs;
+}
 
 interface PDFOptions {
   title?: string;
