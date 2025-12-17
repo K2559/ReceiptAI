@@ -12,11 +12,11 @@
  */
 
 import pdfMake from 'pdfmake-with-chinese-fonts/pdfmake';
-import pdfFonts from 'pdfmake-with-chinese-fonts/vfs_fonts';
+import * as pdfFonts from 'pdfmake-with-chinese-fonts/vfs_fonts';
 import { ReceiptData } from '../types';
 
 // Set up fonts with Chinese support
-(pdfMake as any).vfs = pdfFonts.pdfMake.vfs;
+(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || (pdfFonts as any).default?.pdfMake?.vfs || pdfFonts;
 
 // The pdfmake-with-chinese-fonts package includes Chinese fonts
 // Available fonts: simsun (SimSun), whzming (WenQuanYi Micro Hei)
