@@ -1,3 +1,10 @@
+/**
+ * DEPRECATED: This file uses jsPDF which has poor Chinese character support.
+ * Please use pdfUtilsPdfMake.ts instead for proper Chinese character rendering.
+ * 
+ * This file is kept for reference only.
+ */
+
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ReceiptData } from '../types';
@@ -7,6 +14,47 @@ interface PDFOptions {
   includeLineItems?: boolean;
   groupByMerchant?: boolean;
 }
+
+// Helper to check if text contains Chinese characters
+const containsChinese = (text: string): boolean => {
+  return /[\u4e00-\u9fa5]/.test(text);
+};
+
+// Helper to safely render text (with Chinese character support)
+const safeText = (doc: jsPDF, text: string, x: number, y: number, options?: any) => {
+  try {
+    // For Chinese characters, convert to image
+    if (containsChinese(text)) {
+      const fontSize = doc.getFontSize();
+      const imgData = textToImage(text, fontSize);
+      
+      if (imgData) {
+        // Add text as image
+        const imgProps = doc.getImageProperties(imgData);
+        const imgHeight = (fontSize * 1.2) / 3; // Approximate height in mm
+        const imgWidth = (imgProps.width / imgProps.height) * imgHeight;
+        
+        try {
+          doc.addImage(imgData, 'PNG', x, y - imgHeight + 2, imgWidth, imgHeight);
+          return;
+        } catch (imgError) {
+          console.warn('Failed to add text as image, using fallback');
+        }
+      }
+    }
+    
+    // Fallback to regular text rendering
+    doc.text(text, x, y, options);
+  } catch (error) {
+    console.warn('Error rendering text:', error);
+    // Last resort: render as is
+    try {
+      doc.text(text, x, y, options);
+    } catch {
+      // Skip if all fails
+    }
+  }
+};
 
 export const generatePDFReport = (
   receipts: ReceiptData[], 
@@ -106,6 +154,33 @@ export const generatePDFReport = (
       3: { cellWidth: 25, halign: 'center' },
       4: { cellWidth: 40 }
     },
+    didDrawCell: (data) => {
+      // Custom rendering for Chinese characters in cells
+      const cell = data.cell;
+      const text = cell.text && cell.text.length > 0 ? cell.text[0] : '';
+      
+      if (text && containsChinese(text)) {
+        const imgData = textToImage(text, 9);
+        if (imgData) {
+          try {
+            const x = cell.x + 2;
+            const y = cell.y + cell.height / 2;
+            const imgProps = doc.getImageProperties(imgData);
+            const imgHeight = 3; // Small height for table cells
+            const imgWidth = (imgProps.width / imgProps.height) * imgHeight;
+            
+            // Clear the original text
+            doc.setFillColor(255, 255, 255);
+            doc.rect(cell.x, cell.y, cell.width, cell.height, 'F');
+            
+            // Add image
+            doc.addImage(imgData, 'PNG', x, y - imgHeight / 2, imgWidth, imgHeight);
+          } catch (error) {
+            // Fallback to original text if image fails
+          }
+        }
+      }
+    },
     didDrawPage: (data) => {
       // Footer
       const pageCount = (doc as any).internal.getNumberOfPages();
@@ -141,20 +216,20 @@ export const generatePDFReport = (
 
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text(merchant, 14, yPosition);
+    safeText(doc, merchant, 14, yPosition);
     yPosition += 8;
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Date: ${date}`, 14, yPosition);
+    safeText(doc, `Date: ${date}`, 14, yPosition);
     yPosition += 6;
-    doc.text(`Total Amount: $${amount}`, 14, yPosition);
+    safeText(doc, `Total Amount: $${amount}`, 14, yPosition);
     yPosition += 6;
-    doc.text(`Status: ${status}`, 14, yPosition);
+    safeText(doc, `Status: ${status}`, 14, yPosition);
     yPosition += 6;
-    doc.text(`Category: ${category}`, 14, yPosition);
+    safeText(doc, `Category: ${category}`, 14, yPosition);
     yPosition += 6;
-    doc.text(`Payment Method: ${paymentMethod}`, 14, yPosition);
+    safeText(doc, `Payment Method: ${paymentMethod}`, 14, yPosition);
     yPosition += 10;
 
     // Line Items (if available)
@@ -189,6 +264,33 @@ export const generatePDFReport = (
           1: { cellWidth: 20, halign: 'center' },
           2: { cellWidth: 30, halign: 'right' },
           3: { cellWidth: 30, halign: 'right' }
+        },
+        didDrawCell: (data) => {
+          // Custom rendering for Chinese characters in cells
+          const cell = data.cell;
+          const text = cell.text && cell.text.length > 0 ? cell.text[0] : '';
+          
+          if (text && containsChinese(text)) {
+            const imgData = textToImage(text, 9);
+            if (imgData) {
+              try {
+                const x = cell.x + 2;
+                const y = cell.y + cell.height / 2;
+                const imgProps = doc.getImageProperties(imgData);
+                const imgHeight = 3;
+                const imgWidth = (imgProps.width / imgProps.height) * imgHeight;
+                
+                // Clear the original text
+                doc.setFillColor(255, 255, 255);
+                doc.rect(cell.x, cell.y, cell.width, cell.height, 'F');
+                
+                // Add image
+                doc.addImage(imgData, 'PNG', x, y - imgHeight / 2, imgWidth, imgHeight);
+              } catch (error) {
+                // Fallback to original text if image fails
+              }
+            }
+          }
         }
       });
 
@@ -196,15 +298,20 @@ export const generatePDFReport = (
     }
 
     // Original Receipt Image (if available)
-    if (receipt.rawImage) {
+    // Check multiple possible image fields
+    const imageData = receipt.rawImage || receipt.image || receipt.imageUrl || receipt.imageData;
+    
+    if (imageData) {
       try {
-        const imgData = receipt.rawImage.startsWith('data:') 
-          ? receipt.rawImage 
-          : `data:image/jpeg;base64,${receipt.rawImage}`;
-        
-        // Create a temporary image to get dimensions
-        const img = new Image();
-        img.src = imgData;
+        // Ensure proper data URL format
+        let imgData = imageData;
+        if (!imgData.startsWith('data:')) {
+          // Try to detect image type from base64 header or default to jpeg
+          const isBase64 = /^[A-Za-z0-9+/=]+$/.test(imgData.substring(0, 100));
+          if (isBase64) {
+            imgData = `data:image/jpeg;base64,${imgData}`;
+          }
+        }
         
         // Calculate available space
         const maxImageWidth = pageWidth - 28; // 14px margin on each side
@@ -235,13 +342,67 @@ export const generatePDFReport = (
           // Center the image horizontally if it's smaller than max width
           const xPosition = 14 + (maxImageWidth - finalWidth) / 2;
           
-          doc.addImage(imgData, 'JPEG', xPosition, yPosition, finalWidth, finalHeight);
+          // Detect image format from data URL
+          let format = 'JPEG';
+          if (imgData.includes('image/png')) format = 'PNG';
+          else if (imgData.includes('image/gif')) format = 'GIF';
+          else if (imgData.includes('image/webp')) format = 'WEBP';
+          
+          doc.addImage(imgData, format, xPosition, yPosition, finalWidth, finalHeight);
           yPosition += finalHeight + 5;
+        } else {
+          // Not enough space on this page, add a new page for the image
+          doc.addPage();
+          yPosition = 20;
+          
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Original Receipt Image', 14, yPosition);
+          yPosition += 8;
+          
+          const imgProps = doc.getImageProperties(imgData);
+          const imgWidth = imgProps.width;
+          const imgHeight = imgProps.height;
+          const imgRatio = imgWidth / imgHeight;
+          
+          const maxImageWidth = pageWidth - 28;
+          const maxImageHeight = pageHeight - 50;
+          
+          let finalWidth = maxImageWidth;
+          let finalHeight = finalWidth / imgRatio;
+          
+          if (finalHeight > maxImageHeight) {
+            finalHeight = maxImageHeight;
+            finalWidth = finalHeight * imgRatio;
+          }
+          
+          const xPosition = 14 + (maxImageWidth - finalWidth) / 2;
+          
+          let format = 'JPEG';
+          if (imgData.includes('image/png')) format = 'PNG';
+          else if (imgData.includes('image/gif')) format = 'GIF';
+          else if (imgData.includes('image/webp')) format = 'WEBP';
+          
+          doc.addImage(imgData, format, xPosition, yPosition, finalWidth, finalHeight);
         }
       } catch (error) {
         console.error('Error adding receipt image to PDF:', error);
-        // Continue without the image if there's an error
+        // Add error message in PDF
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(200, 0, 0);
+        doc.text('(Image could not be loaded)', 14, yPosition);
+        doc.setTextColor(0, 0, 0);
+        yPosition += 10;
       }
+    } else {
+      // No image available
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(150, 150, 150);
+      doc.text('(No receipt image available)', 14, yPosition);
+      doc.setTextColor(0, 0, 0);
+      yPosition += 10;
     }
 
     // Additional Notes (if available)
@@ -257,7 +418,7 @@ export const generatePDFReport = (
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         const splitNotes = doc.splitTextToSize(receipt.notes, pageWidth - 28);
-        doc.text(splitNotes, 14, yPosition);
+        safeText(doc, splitNotes, 14, yPosition);
       }
     }
 

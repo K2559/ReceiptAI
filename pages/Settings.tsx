@@ -5,22 +5,30 @@ import { Save, RotateCcw, CheckCircle } from 'lucide-react';
 import { getStorageUsage } from '../utils/storageUtils';
 
 const StorageUsageBar: React.FC = () => {
-  const usage = getStorageUsage();
+  const [usage, setUsage] = useState<{ usedMB: string; limitMB?: string; percentUsed: string } | null>(null);
+  
+  useEffect(() => {
+    getStorageUsage().then(setUsage);
+  }, []);
+  
+  if (!usage) return <div className="mt-3 text-xs text-slate-500">Loading storage info...</div>;
+  
   const percent = parseFloat(usage.percentUsed);
   const color = percent > 90 ? 'bg-red-600' : percent > 70 ? 'bg-yellow-600' : 'bg-green-600';
   
   return (
     <div className="mt-3">
-      <div className="flex justify-between text-xs text-red-800 mb-1">
-        <span>Storage Used</span>
-        <span className="font-semibold">{usage.usedMB}MB / ~10MB ({usage.percentUsed}%)</span>
+      <div className="flex justify-between text-xs text-slate-600 mb-1">
+        <span>Storage Used (IndexedDB)</span>
+        <span className="font-semibold">{usage.usedMB}MB {usage.limitMB ? `/ ${usage.limitMB}MB` : ''} ({usage.percentUsed}%)</span>
       </div>
-      <div className="w-full bg-red-200 rounded-full h-2">
+      <div className="w-full bg-slate-200 rounded-full h-2">
         <div 
           className={`${color} h-2 rounded-full transition-all duration-300`}
           style={{ width: `${Math.min(percent, 100)}%` }}
         />
       </div>
+      <p className="text-xs text-slate-400 mt-1">IndexedDB provides much more storage than localStorage (typically GB instead of 5-10MB)</p>
     </div>
   );
 };

@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { getReceipts, updateReceipt, deleteReceipt, clearDatabase, exportDatabaseJSON, importDatabaseJSON } from '../services/storageService';
+import { getReceipts, getReceiptsAsync, updateReceipt, deleteReceipt, clearDatabase, exportDatabaseJSON, importDatabaseJSON, initStorage } from '../services/storageService';
 import { getSettings } from '../services/settingsService';
 import { exportToExcel } from '../utils/excelUtils';
-import { generatePDFReport } from '../utils/pdfUtils';
+import { generatePDFReport } from '../utils/pdfUtilsPdfMake';
 import { ReceiptData, ReceiptStatus } from '../types';
 import { Download, Trash2, Eye, Search, Check, X, ZoomIn, ZoomOut, RotateCcw, Save, ChevronUp, ChevronDown, ChevronsUpDown, Filter, FileText, Upload as UploadIcon, Database as DatabaseIcon } from 'lucide-react';
 import { useProcessing } from '../context/ProcessingContext';
@@ -82,8 +82,10 @@ const DatabasePage: React.FC = () => {
     loadColumns();
   }, []);
 
-  const loadData = () => {
-    setData(getReceipts());
+  const loadData = async () => {
+    await initStorage();
+    const receipts = await getReceiptsAsync();
+    setData(receipts);
   };
 
   const loadColumns = () => {
@@ -113,17 +115,17 @@ const DatabasePage: React.FC = () => {
     }
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm('Are you sure you want to delete this receipt?')) {
-      const updated = deleteReceipt(id);
+      const updated = await deleteReceipt(id);
       setData(updated);
       if (selectedReceipt?.id === id) setSelectedReceipt(null);
     }
   };
 
-  const handleUpdate = (id: string, updates: Partial<ReceiptData>) => {
-    const updated = updateReceipt(id, updates);
+  const handleUpdate = async (id: string, updates: Partial<ReceiptData>) => {
+    const updated = await updateReceipt(id, updates);
     setData(updated);
     // If updating the currently open receipt, update local state too
     if (selectedReceipt && selectedReceipt.id === id) {
@@ -294,7 +296,7 @@ const DatabasePage: React.FC = () => {
               />
             </label>
             <button
-              onClick={exportDatabaseJSON}
+              onClick={() => exportDatabaseJSON()}
               className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow-sm font-medium transition-all whitespace-nowrap"
               title="Export database with images as JSON"
             >
@@ -302,9 +304,9 @@ const DatabasePage: React.FC = () => {
               Export JSON
             </button>
             <button
-              onClick={() => {
+              onClick={async () => {
                   if(confirm("Clear all data?")) {
-                      clearDatabase();
+                      await clearDatabase();
                       setData([]);
                   }
               }}
@@ -462,7 +464,7 @@ const DatabasePage: React.FC = () => {
         <ReviewModal 
             receipt={selectedReceipt} 
             onClose={() => setSelectedReceipt(null)} 
-            onSave={(id, data) => handleUpdate(id, data)}
+            onSave={async (id, data) => { await handleUpdate(id, data); }}
         />
       )}
     </div>
@@ -474,7 +476,7 @@ const DatabasePage: React.FC = () => {
 const ReviewModal: React.FC<{
     receipt: ReceiptData; 
     onClose: () => void;
-    onSave: (id: string, updates: Partial<ReceiptData>) => void;
+    onSave: (id: string, updates: Partial<ReceiptData>) => Promise<void>;
 }> = ({ receipt, onClose, onSave }) => {
     const [formData, setFormData] = useState<ReceiptData>({ ...receipt });
     const [scale, setScale] = useState(1);
@@ -530,10 +532,10 @@ const ReviewModal: React.FC<{
         }
     };
 
-    const saveAndClose = (status?: ReceiptStatus) => {
+    const saveAndClose = async (status?: ReceiptStatus) => {
         const updates = { ...formData };
         if (status) updates.status = status;
-        onSave(receipt.id, updates);
+        await onSave(receipt.id, updates);
         onClose();
     };
 

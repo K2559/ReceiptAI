@@ -28,6 +28,76 @@ export const addDebugLog = (level: DebugLog['level'], message: string, details?:
 export const getDebugLogs = () => [...debugLogs];
 export const clearDebugLogs = () => { debugLogs = []; };
 
+// Retry mechanism with exponential backoff
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+interface RetryOptions {
+  maxRetries?: number;
+  initialDelay?: number;
+  maxDelay?: number;
+  backoffMultiplier?: number;
+}
+
+const withRetry = async <T>(
+  fn: () => Promise<T>,
+  options: RetryOptions = {}
+): Promise<T> => {
+  const {
+    maxRetries = 3,
+    initialDelay = 1000,
+    maxDelay = 10000,
+    backoffMultiplier = 2
+  } = options;
+
+  let lastError: Error;
+  let delay = initialDelay;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        addDebugLog('info', `Retry attempt ${attempt}/${maxRetries}`, { delay });
+        await sleep(delay);
+      }
+      
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      
+      // Check if error is retryable (network errors, 5xx errors, rate limits)
+      const isRetryable = 
+        lastError.message.includes('fetch') ||
+        lastError.message.includes('network') ||
+        lastError.message.includes('timeout') ||
+        lastError.message.includes('500') ||
+        lastError.message.includes('502') ||
+        lastError.message.includes('503') ||
+        lastError.message.includes('504') ||
+        lastError.message.includes('429') ||
+        lastError.message.includes('ECONNRESET') ||
+        lastError.message.includes('ETIMEDOUT');
+
+      if (!isRetryable || attempt === maxRetries) {
+        addDebugLog('error', `Request failed after ${attempt} attempts`, { 
+          error: lastError.message,
+          isRetryable 
+        });
+        throw lastError;
+      }
+
+      addDebugLog('warn', `Request failed, will retry`, { 
+        attempt: attempt + 1,
+        maxRetries,
+        error: lastError.message,
+        nextDelay: Math.min(delay * backoffMultiplier, maxDelay)
+      });
+
+      delay = Math.min(delay * backoffMultiplier, maxDelay);
+    }
+  }
+
+  throw lastError!;
+};
+
 // Helper to convert standard JSON schema types to Gemini Enums
 const convertSchemaToGemini = (schema: any): Schema => {
   if (!schema) return { type: Type.OBJECT, properties: {} };
@@ -63,6 +133,78 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
+// Convert file to full base64 data URL (includes data:mime;base64, prefix)
+const fileToBase64DataUrl = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      resolve(reader.result as string);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
+// Resize and compress image for storage (reduces base64 size significantly)
+const resizeAndCompressImage = (
+  file: File,
+  maxWidth: number = 800,
+  maxHeight: number = 1200,
+  quality: number = 0.7
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    img.onload = () => {
+      let { width, height } = img;
+
+      // Calculate new dimensions maintaining aspect ratio
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'));
+        return;
+      }
+
+      // Draw and compress
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // Use JPEG for better compression (unless it's a PNG with transparency)
+      const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      const compressedDataUrl = canvas.toDataURL(outputType, quality);
+      
+      addDebugLog('info', 'Image compressed', {
+        originalSize: file.size,
+        originalDimensions: `${img.width}x${img.height}`,
+        newDimensions: `${width}x${height}`,
+        compressedSize: compressedDataUrl.length,
+        compressionRatio: ((1 - compressedDataUrl.length / (file.size * 1.37)) * 100).toFixed(1) + '%'
+      });
+
+      resolve(compressedDataUrl);
+    };
+
+    img.onerror = () => reject(new Error('Failed to load image for compression'));
+
+    // Load image from file
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
 // Upload image to cloud storage
 const uploadImageToCloud = async (file: File): Promise<string> => {
   const settings = getSettings();
@@ -74,10 +216,13 @@ const uploadImageToCloud = async (file: File): Promise<string> => {
       const formData = new FormData();
       formData.append('image', file);
       
-      const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
-        method: 'POST',
-        body: formData
-      });
+      const response = await withRetry(
+        () => fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+          method: 'POST',
+          body: formData
+        }),
+        { maxRetries: 2, initialDelay: 500 }
+      );
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -99,9 +244,12 @@ const uploadImageToCloud = async (file: File): Promise<string> => {
       formData.append('file', file);
       formData.append('upload_preset', settings.cloudinaryUploadPreset);
       
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${settings.cloudinaryCloudName}/image/upload`,
-        { method: 'POST', body: formData }
+      const response = await withRetry(
+        () => fetch(
+          `https://api.cloudinary.com/v1_1/${settings.cloudinaryCloudName}/image/upload`,
+          { method: 'POST', body: formData }
+        ),
+        { maxRetries: 2, initialDelay: 500 }
       );
       
       if (!response.ok) {
@@ -118,10 +266,14 @@ const uploadImageToCloud = async (file: File): Promise<string> => {
       throw new Error('Using local storage');
     }
   } catch (error) {
-    addDebugLog('warn', 'Cloud upload failed, using object URL instead of base64 to save storage', { error: (error as Error).message });
-    // Use object URL instead of base64 to avoid localStorage quota issues
-    // Note: This URL is temporary and only valid during the session
-    return URL.createObjectURL(file);
+    addDebugLog('warn', 'Cloud upload failed, using compressed base64 for persistent storage', { error: (error as Error).message });
+    // Resize and compress image before storing as base64 to save localStorage space
+    try {
+      return await resizeAndCompressImage(file);
+    } catch (compressError) {
+      addDebugLog('warn', 'Image compression failed, using original', { error: (compressError as Error).message });
+      return await fileToBase64DataUrl(file);
+    }
   }
 };
 
@@ -208,7 +360,10 @@ export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
         hasSchema: !!parsedSchema
       });
 
-      const response = await ai.models.generateContent(requestPayload);
+      const response = await withRetry(
+        () => ai.models.generateContent(requestPayload),
+        { maxRetries: 3, initialDelay: 1000 }
+      );
       
       addDebugLog('success', 'Received response from Gemini');
 
@@ -278,11 +433,14 @@ export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
         headers: Object.keys(headers)
       });
 
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body)
-      });
+      const res = await withRetry(
+        () => fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body)
+        }),
+        { maxRetries: 3, initialDelay: 1000 }
+      );
 
       addDebugLog('info', `Received response: ${res.status} ${res.statusText}`);
 
@@ -378,11 +536,23 @@ export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
       stack: (error as Error).stack 
     });
     
+    // Convert to compressed base64 for persistent storage even on error
+    let errorImageUrl: string;
+    try {
+      errorImageUrl = await resizeAndCompressImage(file);
+    } catch {
+      try {
+        errorImageUrl = await fileToBase64DataUrl(file);
+      } catch {
+        errorImageUrl = ''; // Fallback if all fails
+      }
+    }
+    
     return {
       id: baseId,
       createdAt: Date.now(),
       status: 'error',
-      rawImage: URL.createObjectURL(file),
+      rawImage: errorImageUrl,
       error: errorMessage
     };
   }

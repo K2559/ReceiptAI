@@ -2,6 +2,67 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { ReceiptData } from "../types";
 import { v4 as uuidv4 } from 'uuid';
 
+// Retry mechanism with exponential backoff
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+interface RetryOptions {
+  maxRetries?: number;
+  initialDelay?: number;
+  maxDelay?: number;
+  backoffMultiplier?: number;
+}
+
+const withRetry = async <T>(
+  fn: () => Promise<T>,
+  options: RetryOptions = {}
+): Promise<T> => {
+  const {
+    maxRetries = 3,
+    initialDelay = 1000,
+    maxDelay = 10000,
+    backoffMultiplier = 2
+  } = options;
+
+  let lastError: Error;
+  let delay = initialDelay;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        console.log(`Retry attempt ${attempt}/${maxRetries} after ${delay}ms`);
+        await sleep(delay);
+      }
+      
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      
+      // Check if error is retryable
+      const isRetryable = 
+        lastError.message.includes('fetch') ||
+        lastError.message.includes('network') ||
+        lastError.message.includes('timeout') ||
+        lastError.message.includes('500') ||
+        lastError.message.includes('502') ||
+        lastError.message.includes('503') ||
+        lastError.message.includes('504') ||
+        lastError.message.includes('429') ||
+        lastError.message.includes('ECONNRESET') ||
+        lastError.message.includes('ETIMEDOUT');
+
+      if (!isRetryable || attempt === maxRetries) {
+        console.error(`Request failed after ${attempt} attempts:`, lastError.message);
+        throw lastError;
+      }
+
+      console.warn(`Request failed (attempt ${attempt + 1}/${maxRetries}), retrying...`, lastError.message);
+      delay = Math.min(delay * backoffMultiplier, maxDelay);
+    }
+  }
+
+  throw lastError!;
+};
+
 const getClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
@@ -61,20 +122,23 @@ export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
     const ai = getClient();
     const imagePart = await fileToGenerativePart(file);
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: {
-        parts: [
-          imagePart,
-          { text: "Analyze this receipt image and extract the following details into JSON format: Merchant Name, Date, Total Amount, Currency, Category, and individual line items." }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: receiptSchema,
-        temperature: 0.1, // Low temperature for factual extraction
-      }
-    });
+    const response = await withRetry(
+      () => ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: {
+          parts: [
+            imagePart,
+            { text: "Analyze this receipt image and extract the following details into JSON format: Merchant Name, Date, Total Amount, Currency, Category, and individual line items." }
+          ]
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: receiptSchema,
+          temperature: 0.1, // Low temperature for factual extraction
+        }
+      }),
+      { maxRetries: 3, initialDelay: 1000 }
+    );
 
     const text = response.text;
     if (!text) throw new Error("No response from Gemini");

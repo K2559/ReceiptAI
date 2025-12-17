@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, ReactNode, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { extractReceiptData, addDebugLog } from '../services/llmService';
-import { addReceipt } from '../services/storageService';
+import { addReceipt, initStorage } from '../services/storageService';
+import { getSettings } from '../services/settingsService';
 
 export interface QueueItem {
   id: string;
@@ -33,6 +34,11 @@ export const ProcessingProvider: React.FC<{ children: ReactNode }> = ({ children
   // Use ref to access latest queue state inside async loops
   const queueRef = useRef(queue);
   queueRef.current = queue;
+
+  // Initialize IndexedDB storage on mount
+  useEffect(() => {
+    initStorage().catch(console.error);
+  }, []);
 
   const addLog = (msg: string) => setLogs(prev => [...prev, msg]);
 
@@ -66,14 +72,16 @@ export const ProcessingProvider: React.FC<{ children: ReactNode }> = ({ children
     setIsProcessing(true);
     setLogs([]); 
     
-    const BATCH_SIZE = 3;
+    // Get concurrency setting from user settings
+    const settings = getSettings();
+    const BATCH_SIZE = settings.concurrentApiCalls || 10;
     
     try {
         let pendingItems = queueRef.current.filter(i => i.status === 'pending');
         if (pendingItems.length === 0) {
             addLog("No pending files to process.");
         } else {
-            addLog(`Starting batch processing for ${pendingItems.length} files...`);
+            addLog(`Starting batch processing for ${pendingItems.length} files (concurrency: ${BATCH_SIZE})...`);
         }
         
         while (pendingItems.length > 0) {
@@ -132,7 +140,7 @@ export const ProcessingProvider: React.FC<{ children: ReactNode }> = ({ children
                         });
                         
                         try {
-                            addReceipt(data);
+                            await addReceipt(data);
                             addDebugLog('success', `[ProcessingContext] Successfully saved to database`, {
                                 fileName: item.file.name,
                                 receiptId: data.id

@@ -1,68 +1,74 @@
 import { ReceiptData } from "../types";
+import {
+  getAllReceipts,
+  addReceiptIDB,
+  updateReceiptIDB,
+  deleteReceiptIDB,
+  clearAllReceiptsIDB,
+  migrateFromLocalStorage,
+  getStorageEstimate
+} from "./indexedDBService";
 
-const STORAGE_KEY = 'receiptai_db_v1';
+// Cache for receipts to avoid async calls everywhere
+let receiptsCache: ReceiptData[] | null = null;
+let cacheInitialized = false;
 
-export const getReceipts = (): ReceiptData[] => {
-  const data = localStorage.getItem(STORAGE_KEY);
-  return data ? JSON.parse(data) : [];
-};
-
-export const saveReceipts = (receipts: ReceiptData[]) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(receipts));
-};
-
-export const addReceipt = (receipt: ReceiptData) => {
-  try {
-    const current = getReceipts();
-    const updated = [receipt, ...current];
-    saveReceipts(updated);
-    return updated;
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-      // Try to free up space by removing base64 images from older receipts
-      console.warn('Storage quota exceeded, attempting to optimize...');
-      const current = getReceipts();
-      
-      // Remove rawImage from older receipts to free space
-      const optimized = current.map(r => {
-        if (r.rawImage && r.rawImage.startsWith('data:')) {
-          return { ...r, rawImage: undefined };
-        }
-        return r;
-      });
-      
-      saveReceipts(optimized);
-      
-      // Now try to add the new receipt
-      const updated = [receipt, ...optimized];
-      saveReceipts(updated);
-      return updated;
-    }
-    throw error;
+// Initialize and migrate from localStorage if needed
+export const initStorage = async (): Promise<void> => {
+  if (cacheInitialized) return;
+  
+  // Migrate any existing localStorage data
+  const migrated = await migrateFromLocalStorage();
+  if (migrated > 0) {
+    console.log(`Migrated ${migrated} receipts from localStorage to IndexedDB`);
   }
+  
+  // Load initial cache
+  receiptsCache = await getAllReceipts();
+  cacheInitialized = true;
 };
 
-export const updateReceipt = (id: string, updates: Partial<ReceiptData>) => {
-  const current = getReceipts();
-  const updated = current.map(r => r.id === id ? { ...r, ...updates } : r);
-  saveReceipts(updated);
-  return updated;
+// Sync version for backward compatibility (uses cache)
+export const getReceipts = (): ReceiptData[] => {
+  return receiptsCache || [];
 };
 
-export const deleteReceipt = (id: string) => {
-  const current = getReceipts();
-  const updated = current.filter(r => r.id !== id);
-  saveReceipts(updated);
-  return updated;
+// Async version that ensures fresh data
+export const getReceiptsAsync = async (): Promise<ReceiptData[]> => {
+  await initStorage();
+  receiptsCache = await getAllReceipts();
+  return receiptsCache;
 };
 
-export const clearDatabase = () => {
-  localStorage.removeItem(STORAGE_KEY);
+export const addReceipt = async (receipt: ReceiptData): Promise<ReceiptData[]> => {
+  await initStorage();
+  await addReceiptIDB(receipt);
+  receiptsCache = await getAllReceipts();
+  return receiptsCache;
+};
+
+export const updateReceipt = async (id: string, updates: Partial<ReceiptData>): Promise<ReceiptData[]> => {
+  await initStorage();
+  await updateReceiptIDB(id, updates);
+  receiptsCache = await getAllReceipts();
+  return receiptsCache;
+};
+
+export const deleteReceipt = async (id: string): Promise<ReceiptData[]> => {
+  await initStorage();
+  await deleteReceiptIDB(id);
+  receiptsCache = await getAllReceipts();
+  return receiptsCache;
+};
+
+export const clearDatabase = async (): Promise<ReceiptData[]> => {
+  await clearAllReceiptsIDB();
+  receiptsCache = [];
   return [];
 };
 
-export const exportDatabaseJSON = () => {
-  const receipts = getReceipts();
+export const exportDatabaseJSON = async (): Promise<void> => {
+  const receipts = await getReceiptsAsync();
   const dataStr = JSON.stringify(receipts, null, 2);
   const blob = new Blob([dataStr], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -75,34 +81,36 @@ export const exportDatabaseJSON = () => {
   URL.revokeObjectURL(url);
 };
 
-export const importDatabaseJSON = (file: File): Promise<ReceiptData[]> => {
+export const importDatabaseJSON = async (file: File): Promise<ReceiptData[]> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const content = e.target?.result as string;
         const receipts = JSON.parse(content) as ReceiptData[];
         
-        // Validate the data structure
         if (!Array.isArray(receipts)) {
           throw new Error('Invalid data format: expected an array of receipts');
         }
         
-        // Basic validation for each receipt
         receipts.forEach((receipt, index) => {
           if (!receipt.id || !receipt.createdAt || !receipt.status) {
             throw new Error(`Invalid receipt at index ${index}: missing required fields`);
           }
         });
         
-        // Merge with existing data (avoid duplicates by ID)
-        const existing = getReceipts();
+        await initStorage();
+        const existing = await getAllReceipts();
         const existingIds = new Set(existing.map(r => r.id));
         const newReceipts = receipts.filter(r => !existingIds.has(r.id));
-        const merged = [...newReceipts, ...existing];
         
-        saveReceipts(merged);
-        resolve(merged);
+        // Add new receipts to IndexedDB
+        for (const receipt of newReceipts) {
+          await addReceiptIDB(receipt);
+        }
+        
+        receiptsCache = await getAllReceipts();
+        resolve(receiptsCache);
       } catch (error) {
         reject(error);
       }
@@ -111,3 +119,6 @@ export const importDatabaseJSON = (file: File): Promise<ReceiptData[]> => {
     reader.readAsText(file);
   });
 };
+
+// Export storage estimate for UI
+export { getStorageEstimate };
