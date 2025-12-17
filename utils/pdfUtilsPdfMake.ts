@@ -11,29 +11,20 @@
  * across all PDF viewers and platforms.
  */
 
-import pdfMake from 'pdfmake-with-chinese-fonts/pdfmake';
-import * as pdfFonts from 'pdfmake-with-chinese-fonts/vfs_fonts';
+import pdfMake from 'pdfmake/build/pdfmake';
+import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { ReceiptData } from '../types';
 
-// Set up fonts with Chinese support
-(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || (pdfFonts as any).default?.pdfMake?.vfs || pdfFonts;
+// Set up fonts
+(pdfMake as any).vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts.vfs;
 
-// The pdfmake-with-chinese-fonts package includes Chinese fonts
-// Available fonts: simsun (SimSun), whzming (WenQuanYi Micro Hei)
+// Use default Roboto fonts from pdfmake
 (pdfMake as any).fonts = {
   Roboto: {
     normal: 'Roboto-Regular.ttf',
-    bold: 'Roboto-Bold.ttf',
+    bold: 'Roboto-Medium.ttf',
     italics: 'Roboto-Italic.ttf',
-    black: 'Roboto-Black.ttf'
-  },
-  simsun: {
-    normal: 'SimSun-Regular.ttf',
-    bold: 'SimSun-Bold.ttf'
-  },
-  whzming: {
-    normal: 'whz-ming-regular.ttf',
-    bold: 'whz-ming-bold.ttf'
+    bolditalics: 'Roboto-MediumItalic.ttf'
   }
 };
 
@@ -295,7 +286,7 @@ export const generatePDFReport = (
     },
     defaultStyle: {
       fontSize: 10,
-      font: 'simsun' // Use SimSun font which supports Chinese characters
+      font: 'Roboto'
     },
     pageMargins: [40, 40, 40, 40],
     footer: (currentPage: number, pageCount: number) => {
