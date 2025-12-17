@@ -34,12 +34,12 @@ jobs:
 
       - name: Type check
         run: npx tsc --noEmit
-        continue-on-error: true
 
       - name: Build application
         run: npm run build
         env:
           VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VITE_BASE_PATH: /ReceiptAI
 
       - name: Display build info
         run: |
