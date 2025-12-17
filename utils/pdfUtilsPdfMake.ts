@@ -32,37 +32,48 @@ const loadChineseFont = async (): Promise<boolean> => {
   chineseFontLoading = true;
   
   try {
-    // Use Noto Sans SC from a reliable CDN
-    const fontUrl = 'https://cdn.jsdelivr.net/npm/noto-sans-sc@1.0.1/fonts/NotoSansSC-Regular.otf';
+    // Use Source Han Sans (思源黑体) - a reliable Chinese font
+    // This is hosted on unpkg which is very reliable
+    const fontUrl = 'https://unpkg.com/source-han-sans-sc@1.0.0/SourceHanSansSC-Regular.ttf';
     
+    console.log('Loading Chinese font from:', fontUrl);
     const response = await fetch(fontUrl);
-    if (!response.ok) throw new Error('Failed to fetch font');
+    if (!response.ok) {
+      console.error('Font fetch failed:', response.status, response.statusText);
+      throw new Error(`Failed to fetch font: ${response.status}`);
+    }
     
     const arrayBuffer = await response.arrayBuffer();
-    const base64 = btoa(
-      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-    );
+    console.log('Font downloaded, size:', arrayBuffer.byteLength);
+    
+    // Convert to base64
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
     
     // Add to pdfMake vfs
     (pdfMake as any).vfs = (pdfMake as any).vfs || {};
-    (pdfMake as any).vfs['NotoSansSC-Regular.otf'] = base64;
+    (pdfMake as any).vfs['SourceHanSans.ttf'] = base64;
     
     // Register the font
     (pdfMake as any).fonts = {
       ...(pdfMake as any).fonts,
-      NotoSansSC: {
-        normal: 'NotoSansSC-Regular.otf',
-        bold: 'NotoSansSC-Regular.otf',
-        italics: 'NotoSansSC-Regular.otf',
-        bolditalics: 'NotoSansSC-Regular.otf'
+      SourceHanSans: {
+        normal: 'SourceHanSans.ttf',
+        bold: 'SourceHanSans.ttf',
+        italics: 'SourceHanSans.ttf',
+        bolditalics: 'SourceHanSans.ttf'
       }
     };
     
     chineseFontLoaded = true;
-    console.log('Chinese font loaded successfully');
+    console.log('Chinese font loaded and registered successfully');
     return true;
   } catch (error) {
-    console.warn('Failed to load Chinese font:', error);
+    console.error('Failed to load Chinese font:', error);
     return false;
   } finally {
     chineseFontLoading = false;
@@ -141,8 +152,8 @@ export const generatePDFReport = async (
 
   // Try to load Chinese font
   const hasChineseFont = await loadChineseFont();
-  const fontName = hasChineseFont ? 'NotoSansSC' : 'Roboto';
-  console.log('Using font:', fontName);
+  const fontName = hasChineseFont ? 'SourceHanSans' : 'Roboto';
+  console.log('Using font:', fontName, 'Chinese font loaded:', hasChineseFont);
 
   try {
 
