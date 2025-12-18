@@ -28,7 +28,58 @@ const formatDate = (dateValue: any): string => {
   }
 };
 
-// Render text as image to support Chinese characters
+// Check if text contains Chinese characters
+const containsChinese = (text: string): boolean => {
+  return /[\u4e00-\u9fa5\u3400-\u4dbf\u{20000}-\u{2a6df}]/u.test(text);
+};
+
+// Render text to canvas and return as image data
+const textToImageData = (
+  text: string,
+  fontSize: number,
+  fontWeight: string = 'normal',
+  maxWidth?: number
+): { data: string; width: number; height: number } | null => {
+  if (!text) return null;
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const scale = 3; // High DPI for crisp text
+  const font = `${fontWeight} ${fontSize * scale}px "Microsoft YaHei", "SimHei", "PingFang SC", "Noto Sans SC", "Source Han Sans CN", sans-serif`;
+  
+  ctx.font = font;
+  let displayText = text;
+  
+  // Truncate if too wide
+  if (maxWidth) {
+    const maxPx = maxWidth * 2.83 * scale; // mm to px
+    while (ctx.measureText(displayText).width > maxPx && displayText.length > 3) {
+      displayText = displayText.slice(0, -4) + '...';
+    }
+  }
+  
+  const metrics = ctx.measureText(displayText);
+  canvas.width = Math.ceil(metrics.width) + 10;
+  canvas.height = Math.ceil(fontSize * scale * 1.4);
+
+  // Redraw after resize (canvas clears on resize)
+  ctx.fillStyle = 'white';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.font = font;
+  ctx.fillStyle = 'black';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(displayText, 2, canvas.height / 2);
+
+  return {
+    data: canvas.toDataURL('image/png'),
+    width: canvas.width / scale / 2.83, // px to mm
+    height: canvas.height / scale / 2.83
+  };
+};
+
+// Render text as image in PDF (for standalone text)
 const renderTextAsImage = (
   doc: jsPDF,
   text: string,
@@ -38,37 +89,17 @@ const renderTextAsImage = (
   fontWeight: string = 'normal'
 ): number => {
   if (!text) return 0;
-  
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
+
+  const img = textToImageData(text, fontSize, fontWeight);
+  if (!img) {
     doc.text(text, x, y);
     return doc.getTextWidth(text);
   }
 
-  // Set up canvas with high DPI for crisp text
-  const scale = 3;
-  ctx.font = `${fontWeight} ${fontSize * scale}px "Microsoft YaHei", "SimHei", "Noto Sans SC", sans-serif`;
-  const metrics = ctx.measureText(text);
-  
-  canvas.width = Math.ceil(metrics.width) + 10;
-  canvas.height = Math.ceil(fontSize * scale * 1.5);
-  
-  // Redraw after resize
-  ctx.fillStyle = 'white';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.font = `${fontWeight} ${fontSize * scale}px "Microsoft YaHei", "SimHei", "Noto Sans SC", sans-serif`;
-  ctx.fillStyle = 'black';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, 2, canvas.height / 2);
-
   try {
-    const imgData = canvas.toDataURL('image/png');
-    const imgWidth = canvas.width / scale / 2.83; // Convert px to mm (72dpi)
-    const imgHeight = canvas.height / scale / 2.83;
-    doc.addImage(imgData, 'PNG', x, y - imgHeight * 0.7, imgWidth, imgHeight);
-    return imgWidth;
-  } catch (e) {
+    doc.addImage(img.data, 'PNG', x, y - img.height * 0.7, img.width, img.height);
+    return img.width;
+  } catch {
     doc.text(text, x, y);
     return doc.getTextWidth(text);
   }
@@ -83,10 +114,7 @@ export const generatePDFReport = async (
     return;
   }
 
-  const {
-    title = 'Receipt Report',
-    includeLineItems = true,
-  } = options;
+  const { title = 'Receipt Report', includeLineItems = true } = options;
 
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -94,18 +122,16 @@ export const generatePDFReport = async (
   let yPos = 20;
 
   // ===== PAGE 1: SUMMARY =====
-  
-  // Title
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
   doc.text(title, pageWidth / 2, yPos, { align: 'center' });
-  
+
   yPos += 10;
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, yPos, { align: 'center' });
   doc.text(`Total Receipts: ${receipts.length}`, pageWidth / 2, yPos + 5, { align: 'center' });
-  
+
   yPos += 15;
 
   // Summary Statistics
@@ -113,15 +139,14 @@ export const generatePDFReport = async (
     const amount = parseFloat(String(r.totalAmount || r.total || 0));
     return sum + (isNaN(amount) ? 0 : amount);
   }, 0);
-
-  const approvedCount = receipts.filter(r => r.status === 'approved').length;
-  const draftCount = receipts.filter(r => r.status === 'draft').length;
+  const approvedCount = receipts.filter((r) => r.status === 'approved').length;
+  const draftCount = receipts.filter((r) => r.status === 'draft').length;
 
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('Accounting Summary', 14, yPos);
   yPos += 10;
-  
+
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   doc.text(`Total Amount: ${totalAmount.toFixed(2)}`, 14, yPos);
@@ -131,8 +156,8 @@ export const generatePDFReport = async (
   doc.text(`Draft Receipts: ${draftCount}`, 14, yPos);
   yPos += 12;
 
-  // Summary Table - use simple ASCII for headers, render Chinese in cells as images
-  const tableData = receipts.map(receipt => [
+  // Summary Table
+  const tableData = receipts.map((receipt) => [
     formatDate(receipt.transactionDate || receipt.date),
     receipt.merchantName || receipt.merchant || '-',
     `${parseFloat(String(receipt.totalAmount || receipt.total || 0)).toFixed(2)}`,
@@ -145,7 +170,7 @@ export const generatePDFReport = async (
     head: [['Date', 'Merchant', 'Amount', 'Status', 'Category']],
     body: tableData,
     theme: 'striped',
-    headStyles: { 
+    headStyles: {
       fillColor: [41, 128, 185],
       textColor: 255,
       fontStyle: 'bold',
@@ -153,7 +178,8 @@ export const generatePDFReport = async (
     },
     styles: {
       fontSize: 9,
-      cellPadding: 3
+      cellPadding: 4,
+      minCellHeight: 8
     },
     columnStyles: {
       0: { cellWidth: 30 },
@@ -161,6 +187,24 @@ export const generatePDFReport = async (
       2: { cellWidth: 25, halign: 'right' },
       3: { cellWidth: 25, halign: 'center' },
       4: { cellWidth: 40 }
+    },
+    didDrawCell: (data) => {
+      // Replace Chinese text with image rendering
+      if (data.section === 'body' && data.cell.text) {
+        const text = data.cell.text.join(' ');
+        if (containsChinese(text)) {
+          const cellWidth = data.cell.width - 4;
+          const img = textToImageData(text, 9, 'normal', cellWidth);
+          if (img) {
+            // Clear the cell text area
+            doc.setFillColor(data.row.index % 2 === 0 ? 255 : 245, data.row.index % 2 === 0 ? 255 : 245, data.row.index % 2 === 0 ? 255 : 250);
+            doc.rect(data.cell.x + 1, data.cell.y + 1, data.cell.width - 2, data.cell.height - 2, 'F');
+            // Draw image
+            const imgY = data.cell.y + (data.cell.height - img.height) / 2;
+            doc.addImage(img.data, 'PNG', data.cell.x + 2, imgY, img.width, img.height);
+          }
+        }
+      }
     }
   });
 
@@ -178,13 +222,19 @@ export const generatePDFReport = async (
 
     // Merchant Name (may contain Chinese)
     const merchant = receipt.merchantName || receipt.merchant || 'Unknown';
-    renderTextAsImage(doc, merchant, 14, yPos, 14, 'bold');
+    if (containsChinese(merchant)) {
+      renderTextAsImage(doc, merchant, 14, yPos, 14, 'bold');
+    } else {
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text(merchant, 14, yPos);
+    }
     yPos += 10;
 
     // Receipt Details
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    
+
     const date = formatDate(receipt.transactionDate || receipt.date);
     const amount = parseFloat(String(receipt.totalAmount || receipt.total || 0)).toFixed(2);
     const status = (receipt.status || 'draft').toUpperCase();
@@ -194,8 +244,18 @@ export const generatePDFReport = async (
     doc.text(`Date: ${date}`, 14, yPos); yPos += 6;
     doc.text(`Total Amount: ${amount}`, 14, yPos); yPos += 6;
     doc.text(`Status: ${status}`, 14, yPos); yPos += 6;
-    doc.text(`Category: ${category}`, 14, yPos); yPos += 6;
-    doc.text(`Payment Method: ${paymentMethod}`, 14, yPos); yPos += 12;
+    
+    // Category might contain Chinese
+    if (containsChinese(category)) {
+      doc.text('Category: ', 14, yPos);
+      renderTextAsImage(doc, category, 14 + doc.getTextWidth('Category: '), yPos, 10);
+    } else {
+      doc.text(`Category: ${category}`, 14, yPos);
+    }
+    yPos += 6;
+    
+    doc.text(`Payment Method: ${paymentMethod}`, 14, yPos);
+    yPos += 12;
 
     // Line Items
     if (includeLineItems && Array.isArray(receipt.items) && receipt.items.length > 0) {
@@ -222,13 +282,32 @@ export const generatePDFReport = async (
         },
         styles: {
           fontSize: 9,
-          cellPadding: 3
+          cellPadding: 4,
+          minCellHeight: 8
         },
         columnStyles: {
           0: { cellWidth: 100 },
           1: { cellWidth: 20, halign: 'center' },
           2: { cellWidth: 30, halign: 'right' },
           3: { cellWidth: 30, halign: 'right' }
+        },
+        didDrawCell: (data) => {
+          // Replace Chinese text in Description column with image
+          if (data.section === 'body' && data.column.index === 0 && data.cell.text) {
+            const text = data.cell.text.join(' ');
+            if (containsChinese(text)) {
+              const cellWidth = data.cell.width - 4;
+              const img = textToImageData(text, 9, 'normal', cellWidth);
+              if (img) {
+                // Clear cell
+                doc.setFillColor(255, 255, 255);
+                doc.rect(data.cell.x + 0.5, data.cell.y + 0.5, data.cell.width - 1, data.cell.height - 1, 'F');
+                // Draw image
+                const imgY = data.cell.y + (data.cell.height - img.height) / 2;
+                doc.addImage(img.data, 'PNG', data.cell.x + 2, imgY, img.width, img.height);
+              }
+            }
+          }
         }
       });
 
@@ -237,29 +316,29 @@ export const generatePDFReport = async (
 
     // Receipt Image
     const imageData = receipt.rawImage || receipt.image || receipt.imageUrl || receipt.imageData;
-    
+
     if (imageData && imageData.startsWith('data:image/')) {
       try {
         const maxImgWidth = pageWidth - 28;
         const maxImgHeight = pageHeight - yPos - 30;
-        
+
         if (maxImgHeight > 50) {
           doc.setFontSize(11);
           doc.setFont('helvetica', 'bold');
           doc.text('Original Receipt Image', 14, yPos);
           yPos += 8;
-          
+
           const imgProps = doc.getImageProperties(imageData);
           const ratio = imgProps.width / imgProps.height;
-          
+
           let finalWidth = Math.min(maxImgWidth, 150);
           let finalHeight = finalWidth / ratio;
-          
+
           if (finalHeight > maxImgHeight) {
             finalHeight = maxImgHeight;
             finalWidth = finalHeight * ratio;
           }
-          
+
           doc.addImage(imageData, 'JPEG', 14, yPos, finalWidth, finalHeight);
         }
       } catch (error) {
@@ -283,21 +362,20 @@ export const generatePDFReport = async (
       doc.setFont('helvetica', 'bold');
       doc.text('Notes', 14, yPos);
       yPos += 6;
-      
+
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
-      const splitNotes = doc.splitTextToSize(receipt.notes, pageWidth - 28);
-      doc.text(splitNotes, 14, yPos);
+      if (containsChinese(receipt.notes)) {
+        renderTextAsImage(doc, receipt.notes.substring(0, 100), 14, yPos, 9);
+      } else {
+        const splitNotes = doc.splitTextToSize(receipt.notes, pageWidth - 28);
+        doc.text(splitNotes, 14, yPos);
+      }
     }
 
     // Page footer
     doc.setFontSize(8);
-    doc.text(
-      `Page ${index + 2} of ${receipts.length + 1}`,
-      pageWidth / 2,
-      pageHeight - 10,
-      { align: 'center' }
-    );
+    doc.text(`Page ${index + 2} of ${receipts.length + 1}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
   }
 
   // Save
