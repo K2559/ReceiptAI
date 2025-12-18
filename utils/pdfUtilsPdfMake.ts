@@ -5,20 +5,27 @@
  */
 
 // @ts-ignore - pdfmake-with-chinese-fonts doesn't have type definitions
-import pdfMakeModule from 'pdfmake-with-chinese-fonts/pdfmake.js';
+import * as pdfMakeModule from 'pdfmake-with-chinese-fonts/pdfmake.js';
 // @ts-ignore - import all exports from vfs_fonts
 import * as pdfFontsModule from 'pdfmake-with-chinese-fonts/vfs_fonts.js';
 import { ReceiptData } from '../types';
 
-// Get the pdfMake instance (handle both ESM default export and direct export)
-const pdfMake = pdfMakeModule.default || pdfMakeModule;
+// Get the pdfMake instance - handle various module export patterns
+const pdfMakeAny = pdfMakeModule as any;
+const pdfMake = pdfMakeAny.default?.default || pdfMakeAny.default || pdfMakeAny.pdfMake || pdfMakeAny;
 
 // Setup pdfMake with Chinese fonts
 // Handle various export structures (ESM/CommonJS/bundled)
 const pdfFonts = pdfFontsModule as any;
-const vfsData = pdfFonts.pdfMake?.vfs || pdfFonts.default?.pdfMake?.vfs || pdfFonts['module.exports']?.pdfMake?.vfs;
-if (vfsData) {
+const vfsData = pdfFonts.pdfMake?.vfs || 
+                pdfFonts.default?.pdfMake?.vfs || 
+                pdfFonts.default?.default?.pdfMake?.vfs ||
+                (typeof window !== 'undefined' && (window as any).pdfMake?.vfs);
+
+if (vfsData && pdfMake) {
   pdfMake.vfs = vfsData;
+} else {
+  console.warn('pdfMake vfs not found, PDF generation may fail');
 }
 
 pdfMake.fonts = {
