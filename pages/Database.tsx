@@ -2,7 +2,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { getReceipts, getReceiptsAsync, updateReceipt, deleteReceipt, clearDatabase, exportDatabaseJSON, importDatabaseJSON, initStorage } from '../services/storageService';
 import { getSettings } from '../services/settingsService';
 import { exportToExcel } from '../utils/excelUtils';
-import { generatePDFReport } from '../utils/pdfUtilsPdfMake';
+// Dynamic import for pdfMake to avoid blocking app load if it fails
+// import { generatePDFReport } from '../utils/pdfUtilsPdfMake';
 import { ReceiptData, ReceiptStatus } from '../types';
 import { Download, Trash2, Eye, Search, Check, X, ZoomIn, ZoomOut, RotateCcw, Save, ChevronUp, ChevronDown, ChevronsUpDown, Filter, FileText, Upload as UploadIcon, Database as DatabaseIcon } from 'lucide-react';
 import { useProcessing } from '../context/ProcessingContext';
@@ -160,16 +161,23 @@ const DatabasePage: React.FC = () => {
     }
   };
 
-  const handleGeneratePDF = () => {
+  const handleGeneratePDF = async () => {
     const selectedReceipts = data.filter(r => selectedIds.has(r.id));
     if (selectedReceipts.length === 0) {
       alert('Please select at least one receipt to generate PDF');
       return;
     }
-    generatePDFReport(selectedReceipts, {
-      title: 'Receipt Report',
-      includeLineItems: true
-    });
+    try {
+      // Dynamic import to avoid blocking app load if pdfMake fails
+      const { generatePDFReport } = await import('../utils/pdfUtilsPdfMake');
+      generatePDFReport(selectedReceipts, {
+        title: 'Receipt Report',
+        includeLineItems: true
+      });
+    } catch (error) {
+      console.error('Failed to load PDF generator:', error);
+      alert('Failed to load PDF generator. Please try again.');
+    }
   };
 
   const handleExportSelected = () => {
