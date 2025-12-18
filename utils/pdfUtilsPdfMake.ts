@@ -1,84 +1,49 @@
 /**
  * PDF Report Generator with Chinese Character Support
  * 
- * Uses pdfmake with dynamically loaded Chinese font (Noto Sans SC)
+ * Uses pdfmake-with-chinese-fonts for proper Chinese character rendering
  */
 
-import pdfMake from 'pdfmake/build/pdfmake';
-import * as pdfFonts from 'pdfmake/build/vfs_fonts';
+// @ts-ignore - pdfmake-with-chinese-fonts doesn't have type definitions
+import pdfMakeModule from 'pdfmake-with-chinese-fonts/pdfmake.js';
+// @ts-ignore - import all exports from vfs_fonts
+import * as pdfFontsModule from 'pdfmake-with-chinese-fonts/vfs_fonts.js';
 import { ReceiptData } from '../types';
 
-// Set up default fonts - handle different module formats
-const vfs = (pdfFonts as any)?.pdfMake?.vfs || (pdfFonts as any)?.vfs || (pdfFonts as any)?.default?.pdfMake?.vfs;
-if (vfs) {
-  (pdfMake as any).vfs = vfs;
+// Get the pdfMake instance (handle both ESM default export and direct export)
+const pdfMake = pdfMakeModule.default || pdfMakeModule;
+
+// Setup pdfMake with Chinese fonts
+// Handle various export structures (ESM/CommonJS/bundled)
+const pdfFonts = pdfFontsModule as any;
+const vfsData = pdfFonts.pdfMake?.vfs || pdfFonts.default?.pdfMake?.vfs || pdfFonts['module.exports']?.pdfMake?.vfs;
+if (vfsData) {
+  pdfMake.vfs = vfsData;
 }
 
-// Chinese font loading state
-let chineseFontLoaded = false;
-let chineseFontLoading = false;
-
-// Load Chinese font from CDN
-const loadChineseFont = async (): Promise<boolean> => {
-  if (chineseFontLoaded) return true;
-  if (chineseFontLoading) {
-    // Wait for existing load
-    while (chineseFontLoading) {
-      await new Promise(r => setTimeout(r, 100));
-    }
-    return chineseFontLoaded;
-  }
-  
-  chineseFontLoading = true;
-  
-  try {
-    // Use Source Han Sans (思源黑体) - a reliable Chinese font
-    // This is hosted on unpkg which is very reliable
-    const fontUrl = 'https://unpkg.com/source-han-sans-sc@1.0.0/SourceHanSansSC-Regular.ttf';
-    
-    console.log('Loading Chinese font from:', fontUrl);
-    const response = await fetch(fontUrl);
-    if (!response.ok) {
-      console.error('Font fetch failed:', response.status, response.statusText);
-      throw new Error(`Failed to fetch font: ${response.status}`);
-    }
-    
-    const arrayBuffer = await response.arrayBuffer();
-    console.log('Font downloaded, size:', arrayBuffer.byteLength);
-    
-    // Convert to base64
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const base64 = btoa(binary);
-    
-    // Add to pdfMake vfs
-    (pdfMake as any).vfs = (pdfMake as any).vfs || {};
-    (pdfMake as any).vfs['SourceHanSans.ttf'] = base64;
-    
-    // Register the font
-    (pdfMake as any).fonts = {
-      ...(pdfMake as any).fonts,
-      SourceHanSans: {
-        normal: 'SourceHanSans.ttf',
-        bold: 'SourceHanSans.ttf',
-        italics: 'SourceHanSans.ttf',
-        bolditalics: 'SourceHanSans.ttf'
-      }
-    };
-    
-    chineseFontLoaded = true;
-    console.log('Chinese font loaded and registered successfully');
-    return true;
-  } catch (error) {
-    console.error('Failed to load Chinese font:', error);
-    return false;
-  } finally {
-    chineseFontLoading = false;
+pdfMake.fonts = {
+  Roboto: {
+    normal: 'Roboto-Regular.ttf',
+    bold: 'Roboto-Bold.ttf',
+    italics: 'Roboto-Italic.ttf',
+    bolditalics: 'Roboto-Italic.ttf'
+  },
+  simsun: {
+    normal: 'SimSun-Regular.ttf',
+    bold: 'SimSun-Bold.ttf',
+    italics: 'SimSun-Regular.ttf',
+    bolditalics: 'SimSun-Bold.ttf'
+  },
+  whzming: {
+    normal: 'whz-ming-regular.ttf',
+    bold: 'whz-ming-bold.ttf',
+    italics: 'whz-ming-regular.ttf',
+    bolditalics: 'whz-ming-bold.ttf'
   }
 };
+
+// Use SimSun for Chinese characters (common Chinese font)
+const chineseFontName = 'simsun';
 
 interface PDFOptions {
   title?: string;
@@ -150,10 +115,9 @@ export const generatePDFReport = async (
     return;
   }
 
-  // Try to load Chinese font
-  const hasChineseFont = await loadChineseFont();
-  const fontName = hasChineseFont ? 'SourceHanSans' : 'Roboto';
-  console.log('Using font:', fontName, 'Chinese font loaded:', hasChineseFont);
+  // Use SimSun font for Chinese character support
+  const fontName = chineseFontName;
+  console.log('Using font:', fontName);
 
   try {
 
