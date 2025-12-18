@@ -20,14 +20,6 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
-      },
-      optimizeDeps: {
-        include: ['pdfmake-with-chinese-fonts/pdfmake.js', 'pdfmake-with-chinese-fonts/vfs_fonts.js']
-      },
-      build: {
-        commonjsOptions: {
-          include: [/pdfmake/, /node_modules/]
-        }
       }
     };
 });

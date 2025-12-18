@@ -2,8 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { getReceipts, getReceiptsAsync, updateReceipt, deleteReceipt, clearDatabase, exportDatabaseJSON, importDatabaseJSON, initStorage } from '../services/storageService';
 import { getSettings } from '../services/settingsService';
 import { exportToExcel } from '../utils/excelUtils';
-// Dynamic import for pdfMake to avoid blocking app load if it fails
-// import { generatePDFReport } from '../utils/pdfUtilsPdfMake';
+// PDF generator is dynamically imported in handleGeneratePDF
 import { ReceiptData, ReceiptStatus } from '../types';
 import { Download, Trash2, Eye, Search, Check, X, ZoomIn, ZoomOut, RotateCcw, Save, ChevronUp, ChevronDown, ChevronsUpDown, Filter, FileText, Upload as UploadIcon, Database as DatabaseIcon } from 'lucide-react';
 import { useProcessing } from '../context/ProcessingContext';
