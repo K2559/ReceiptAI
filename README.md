@@ -13,7 +13,7 @@ A modern web application that uses AI to digitize and manage receipts automatica
 - 🤖 **AI-Powered Extraction** - Intelligent text extraction using Google Gemini AI
 - 💾 **Local Storage** - All data stored locally in your browser
 - 📊 **Excel Export** - Export receipts to Excel spreadsheets (all or selected)
-- 📄 **PDF Reports** - Generate professional PDF reports from selected receipts
+- 📄 **PDF Reports** - Generate professional PDF reports with AI-extracted currency units and prominent totals
 - 💾 **JSON Backup** - Export/import complete database with images as base64
 - 🔍 **Search & Filter** - Easily find receipts by merchant, date, or status
 - ✅ **Direct Selection** - Select multiple receipts with checkboxes (no mode switching required)
@@ -84,7 +84,7 @@ To use ReceiptAI, you need a Google Gemini API key:
 - **Direct Selection**: Click checkboxes to select receipts (always enabled, no mode switching)
 - **Select All**: Use the header checkbox to select/deselect all visible receipts
 - **Clear Selection**: Click "Clear (X)" to deselect all receipts with smooth animation
-- **Generate PDF**: Create PDF reports from selected receipts
+- **Generate PDF**: Create PDF reports from selected receipts (with AI-extracted currency and highlighted totals)
 - **Export Excel**: Export selected receipts to Excel (or all receipts if none selected)
 - **Search & Filter**: Find receipts by merchant, amount, date, or filter by status
 - **Sort**: Click column headers to sort by any field

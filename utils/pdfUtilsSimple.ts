@@ -134,36 +134,57 @@ export const generatePDFReport = async (
 
   yPos += 15;
 
-  // Summary Statistics
-  const totalAmount = receipts.reduce((sum, r) => {
+  // Summary Statistics - group by currency
+  const amountsByCurrency: Record<string, number> = {};
+  receipts.forEach((r) => {
+    const currency = r.currency || 'HKD';
     const amount = parseFloat(String(r.totalAmount || r.total || 0));
-    return sum + (isNaN(amount) ? 0 : amount);
-  }, 0);
+    if (!isNaN(amount)) {
+      amountsByCurrency[currency] = (amountsByCurrency[currency] || 0) + amount;
+    }
+  });
   const approvedCount = receipts.filter((r) => r.status === 'approved').length;
   const draftCount = receipts.filter((r) => r.status === 'draft').length;
 
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('Accounting Summary', 14, yPos);
-  yPos += 10;
+  yPos += 12;
+
+  // Prominent Total Amount Box(es) - one per currency
+  const currencies = Object.keys(amountsByCurrency);
+  currencies.forEach((currency, idx) => {
+    const total = amountsByCurrency[currency];
+    const boxWidth = 90;
+    doc.setFillColor(41, 128, 185);
+    doc.roundedRect(14, yPos - 2, boxWidth, 16, 2, 2, 'F');
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text(`Total: ${currency} ${total.toFixed(2)}`, 18, yPos + 8);
+    doc.setTextColor(0, 0, 0);
+    yPos += 20;
+  });
+  yPos += 2;
 
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Total Amount: ${totalAmount.toFixed(2)}`, 14, yPos);
-  yPos += 7;
   doc.text(`Approved Receipts: ${approvedCount}`, 14, yPos);
   yPos += 7;
   doc.text(`Draft Receipts: ${draftCount}`, 14, yPos);
   yPos += 12;
 
   // Summary Table
-  const tableData = receipts.map((receipt) => [
-    formatDate(receipt.transactionDate || receipt.date),
-    receipt.merchantName || receipt.merchant || '-',
-    `${parseFloat(String(receipt.totalAmount || receipt.total || 0)).toFixed(2)}`,
-    (receipt.status || 'draft').toUpperCase(),
-    receipt.category || '-'
-  ]);
+  const tableData = receipts.map((receipt) => {
+    const currency = receipt.currency || 'HKD';
+    return [
+      formatDate(receipt.transactionDate || receipt.date),
+      receipt.merchantName || receipt.merchant || '-',
+      `${currency} ${parseFloat(String(receipt.totalAmount || receipt.total || 0)).toFixed(2)}`,
+      (receipt.status || 'draft').toUpperCase(),
+      receipt.category || '-'
+    ];
+  });
 
   autoTable(doc, {
     startY: yPos,
@@ -237,12 +258,18 @@ export const generatePDFReport = async (
 
     const date = formatDate(receipt.transactionDate || receipt.date);
     const amount = parseFloat(String(receipt.totalAmount || receipt.total || 0)).toFixed(2);
+    const currency = receipt.currency || 'HKD';
     const status = (receipt.status || 'draft').toUpperCase();
     const category = receipt.category || '-';
     const paymentMethod = receipt.paymentMethod || '-';
 
     doc.text(`Date: ${date}`, 14, yPos); yPos += 6;
-    doc.text(`Total Amount: ${amount}`, 14, yPos); yPos += 6;
+    
+    // Prominent amount display with extracted currency
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Total Amount: ${currency} ${amount}`, 14, yPos);
+    doc.setFont('helvetica', 'normal');
+    yPos += 6;
     doc.text(`Status: ${status}`, 14, yPos); yPos += 6;
     
     // Category might contain Chinese
@@ -264,11 +291,12 @@ export const generatePDFReport = async (
       doc.text('Line Items', 14, yPos);
       yPos += 8;
 
+      const itemCurrency = receipt.currency || 'HKD';
       const itemsData = receipt.items.map((item: any) => [
         item.description || item.name || '-',
         String(item.quantity || 1),
-        `${parseFloat(String(item.price || item.amount || 0)).toFixed(2)}`,
-        `${(parseFloat(String(item.quantity || 1)) * parseFloat(String(item.price || item.amount || 0))).toFixed(2)}`
+        `${itemCurrency} ${parseFloat(String(item.price || item.amount || 0)).toFixed(2)}`,
+        `${itemCurrency} ${(parseFloat(String(item.quantity || 1)) * parseFloat(String(item.price || item.amount || 0))).toFixed(2)}`
       ]);
 
       autoTable(doc, {
