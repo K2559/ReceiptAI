@@ -168,9 +168,9 @@ const DatabasePage: React.FC = () => {
       return;
     }
     try {
-      // Dynamic import to avoid blocking app load if pdfMake fails
-      const { generatePDFReport } = await import('../utils/pdfUtilsPdfMake');
-      generatePDFReport(selectedReceipts, {
+      // Use simple jsPDF-based generator (supports Chinese via canvas rendering)
+      const { generatePDFReport } = await import('../utils/pdfUtilsSimple');
+      await generatePDFReport(selectedReceipts, {
         title: 'Receipt Report',
         includeLineItems: true
       });
