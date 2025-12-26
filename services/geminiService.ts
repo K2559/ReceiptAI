@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { ReceiptData } from "../types";
+import { ReceiptData, BoundingBox } from "../types";
+import { isValidBoundingBox } from "../utils/imageCropUtils";
 import { v4 as uuidv4 } from 'uuid';
 
 // Retry mechanism with exponential backoff
@@ -112,9 +113,33 @@ const receiptSchema: Schema = {
           price: { type: Type.NUMBER },
         }
       }
+    },
+    boundingBox: {
+      type: Type.ARRAY,
+      description: "Receipt bounding box as [ymin, xmin, ymax, xmax] in 0-1000 normalized coordinates. ymin is top edge (0=top, 1000=bottom), xmin is left edge (0=left, 1000=right). Return null if receipt fills entire image or no distinct boundary detected.",
+      items: { type: Type.NUMBER }
     }
   },
   required: ["merchantName", "totalAmount", "items", "category"],
+};
+
+/**
+ * Parses and validates a bounding box from LLM response
+ * @param rawBoundingBox - The raw bounding box data from LLM
+ * @returns Valid BoundingBox or null if invalid/missing
+ */
+const parseBoundingBox = (rawBoundingBox: any): BoundingBox => {
+  if (rawBoundingBox === null || rawBoundingBox === undefined) {
+    return null;
+  }
+
+  if (isValidBoundingBox(rawBoundingBox)) {
+    return rawBoundingBox;
+  }
+
+  // Log warning for invalid bounding box format
+  console.warn('Invalid bounding box format received from LLM:', rawBoundingBox);
+  return null;
 };
 
 export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
@@ -128,7 +153,16 @@ export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
         contents: {
           parts: [
             imagePart,
-            { text: "Analyze this receipt image and extract the following details into JSON format: Merchant Name, Date, Total Amount, Currency, Category, and individual line items." }
+            { text: `Analyze this receipt image and extract the following details into JSON format: Merchant Name, Date, Total Amount, Currency, Category, and individual line items.
+
+Additionally, detect the receipt area in the image and return its bounding box in normalized coordinates (0-1000 scale).
+The bounding box should be returned as [ymin, xmin, ymax, xmax] where:
+- ymin: top edge (0 = top of image, 1000 = bottom)
+- xmin: left edge (0 = left of image, 1000 = right)
+- ymax: bottom edge
+- xmax: right edge
+
+If the receipt fills the entire image or no distinct receipt boundary is detected, omit the boundingBox field.` }
           ]
         },
         config: {
@@ -145,6 +179,9 @@ export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
 
     const parsedData = JSON.parse(text);
 
+    // Parse and validate bounding box, handling null/missing gracefully
+    const boundingBox = parseBoundingBox(parsedData.boundingBox);
+
     return {
       id: uuidv4(),
       createdAt: Date.now(),
@@ -155,7 +192,8 @@ export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
       currency: parsedData.currency || "$",
       category: parsedData.category || "Uncategorized",
       items: parsedData.items || [],
-      rawImage: URL.createObjectURL(file) // Store temporary URL for display
+      rawImage: URL.createObjectURL(file), // Store temporary URL for display
+      boundingBox: boundingBox
     };
   } catch (error) {
     console.error("Gemini Extraction Error:", error);
@@ -170,7 +208,8 @@ export const extractReceiptData = async (file: File): Promise<ReceiptData> => {
       currency: "?",
       category: "Error",
       items: [],
-      rawImage: URL.createObjectURL(file)
+      rawImage: URL.createObjectURL(file),
+      boundingBox: null
     };
   }
 };

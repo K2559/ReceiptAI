@@ -30,7 +30,6 @@ build
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
@@ -48,3 +47,9 @@ coverage
 # Misc
 .turbo
 .vercel
+
+# Lock files (optional - keep package-lock.json for reproducible builds)
+# package-lock.json
+
+# Kiro specs (development documentation)
+# .kiro/specs/

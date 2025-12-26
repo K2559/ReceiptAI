@@ -6,6 +6,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ReceiptData } from '../types';
+import { cropImageByBoundingBox, isValidBoundingBox } from './imageCropUtils';
 
 interface PDFOptions {
   title?: string;
@@ -347,6 +348,17 @@ export const generatePDFReport = async (
 
     if (imageData && imageData.startsWith('data:image/')) {
       try {
+        // Apply cropping if boundingBox is available and valid
+        let imgData = imageData;
+        if (receipt.boundingBox && isValidBoundingBox(receipt.boundingBox)) {
+          try {
+            imgData = await cropImageByBoundingBox(imageData, receipt.boundingBox);
+          } catch (cropError) {
+            console.warn('Failed to crop image, using original:', cropError);
+            // Fall back to original image
+          }
+        }
+        
         const maxImgWidth = pageWidth - 28;
         const maxImgHeight = pageHeight - yPos - 30;
 
@@ -356,7 +368,7 @@ export const generatePDFReport = async (
           doc.text('Original Receipt Image', 14, yPos);
           yPos += 8;
 
-          const imgProps = doc.getImageProperties(imageData);
+          const imgProps = doc.getImageProperties(imgData);
           const ratio = imgProps.width / imgProps.height;
 
           let finalWidth = Math.min(maxImgWidth, 150);
@@ -367,7 +379,7 @@ export const generatePDFReport = async (
             finalWidth = finalHeight * ratio;
           }
 
-          doc.addImage(imageData, 'JPEG', 14, yPos, finalWidth, finalHeight);
+          doc.addImage(imgData, 'JPEG', 14, yPos, finalWidth, finalHeight);
         }
       } catch (error) {
         console.error('Error adding image:', error);

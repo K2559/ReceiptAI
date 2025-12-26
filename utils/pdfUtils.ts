@@ -8,6 +8,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ReceiptData } from '../types';
+import { cropImageByBoundingBox, isValidBoundingBox } from './imageCropUtils';
 
 interface PDFOptions {
   title?: string;
@@ -88,7 +89,7 @@ const safeText = (doc: jsPDF, text: string, x: number, y: number, options?: any)
   }
 };
 
-export const generatePDFReport = (
+export const generatePDFReport = async (
   receipts: ReceiptData[], 
   options: PDFOptions = {}
 ) => {
@@ -228,7 +229,8 @@ export const generatePDFReport = (
   });
 
   // ===== SUBSEQUENT PAGES: ONE RECEIPT PER PAGE =====
-  receipts.forEach((receipt, index) => {
+  for (let index = 0; index < receipts.length; index++) {
+    const receipt = receipts[index];
     doc.addPage();
     yPosition = 20;
 
@@ -342,6 +344,16 @@ export const generatePDFReport = (
           const isBase64 = /^[A-Za-z0-9+/=]+$/.test(imgData.substring(0, 100));
           if (isBase64) {
             imgData = `data:image/jpeg;base64,${imgData}`;
+          }
+        }
+        
+        // Apply cropping if boundingBox is available and valid
+        if (receipt.boundingBox && isValidBoundingBox(receipt.boundingBox)) {
+          try {
+            imgData = await cropImageByBoundingBox(imgData, receipt.boundingBox);
+          } catch (cropError) {
+            console.warn('Failed to crop image, using original:', cropError);
+            // Fall back to original image
           }
         }
         
@@ -462,7 +474,7 @@ export const generatePDFReport = (
       pageHeight - 10,
       { align: 'center' }
     );
-  });
+  }
 
   // Save the PDF
   const filename = `receipt_report_${new Date().toISOString().split('T')[0]}.pdf`;

@@ -6,6 +6,7 @@ import { exportToExcel } from '../utils/excelUtils';
 import { ReceiptData, ReceiptStatus } from '../types';
 import { Download, Trash2, Eye, Search, Check, X, ZoomIn, ZoomOut, RotateCcw, Save, ChevronUp, ChevronDown, ChevronsUpDown, Filter, FileText, Upload as UploadIcon, Database as DatabaseIcon } from 'lucide-react';
 import { useProcessing } from '../context/ProcessingContext';
+import CroppedImage from '../components/CroppedImage';
 
 // --- Helper Components ---
 
@@ -167,15 +168,16 @@ const DatabasePage: React.FC = () => {
       return;
     }
     try {
-      // Use simple jsPDF-based generator (supports Chinese via canvas rendering)
-      const { generatePDFReport } = await import('../utils/pdfUtilsSimple');
-      await generatePDFReport(selectedReceipts, {
+      // Use HTML report generator - opens in new window for browser print-to-PDF
+      // This approach has native Chinese character support
+      const { generateHTMLReport } = await import('../utils/htmlReportUtils');
+      await generateHTMLReport(selectedReceipts, {
         title: 'Receipt Report',
         includeLineItems: true
       });
     } catch (error) {
-      console.error('Failed to load PDF generator:', error);
-      alert('Failed to load PDF generator. Please try again.');
+      console.error('Failed to generate report:', error);
+      alert('Failed to generate report. Please try again.');
     }
   };
 
@@ -577,8 +579,9 @@ const ReviewModal: React.FC<{
                             onWheel={handleWheel}
                         >
                             {receipt.rawImage ? (
-                                <img 
-                                    src={receipt.rawImage} 
+                                <CroppedImage 
+                                    src={receipt.rawImage}
+                                    boundingBox={receipt.boundingBox}
                                     alt="Receipt" 
                                     className="max-w-none transition-transform duration-75 ease-out select-none shadow-lg"
                                     style={{ 
@@ -587,6 +590,7 @@ const ReviewModal: React.FC<{
                                         maxWidth: '80%'
                                     }}
                                     draggable={false}
+                                    showToggle={true}
                                 />
                             ) : (
                                 <div className="text-slate-400 flex flex-col items-center">

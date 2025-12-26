@@ -8,11 +8,16 @@ export interface ReceiptItem {
 
 export type ReceiptStatus = 'processing' | 'draft' | 'approved' | 'rejected' | 'error';
 
+// Bounding box in normalized coordinates (0-1000 scale)
+// Format: [ymin, xmin, ymax, xmax]
+export type BoundingBox = [number, number, number, number] | null;
+
 export interface ReceiptData extends Record<string, any> {
   id: string;
   createdAt: number;
   status: ReceiptStatus;
   rawImage?: string;
+  boundingBox?: BoundingBox;
 }
 
 export enum ProcessingStatus {
